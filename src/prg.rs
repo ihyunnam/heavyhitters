@@ -1,4 +1,4 @@
-use aes::cipher::{NewStreamCipher, SyncStreamCipher};
+// use aes::cipher::{NewStreamCipher, SyncStreamCipher};
 
 use core::arch::x86_64::{
     __m128i, _mm_add_epi64, _mm_loadu_si128, _mm_set_epi64x, _mm_storeu_si128,
@@ -8,6 +8,7 @@ use core::arch::x86_64::{
 use aes::{Aes128, BlockCipher, NewBlockCipher};
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
+use aes::cipher::generic_array::{GenericArray, Block};
 
 use rand::Rng;
 use rand_core::RngCore;
