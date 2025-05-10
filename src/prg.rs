@@ -9,7 +9,7 @@ use aes::{Aes128, BlockCipher, NewBlockCipher};
 // use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 // use aes::cipher::NewStreamCipher;
 use aes_ctr::Aes128Ctr;
-use aes::cipher::generic_array::{GenericArray};
+use aes::cipher::{block::Block, generic_array::GenericArray};
 
 use rand::Rng;
 use rand_core::RngCore;
@@ -52,9 +52,16 @@ pub trait FromRng {
     }
 }
 
-// #[derive(Clone)]
 pub struct PrgStream {
     stream: Aes128Ctr,
+}
+
+impl Clone for PrgStream {
+    fn clone(&self) -> Self {
+        PrgStream {
+            stream: self.stream.clone()
+        }
+    }
 }
 
 pub struct PrgOutput {
