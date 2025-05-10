@@ -56,13 +56,13 @@ pub struct PrgStream {
     stream: Aes128Ctr,
 }
 
-impl Clone for PrgStream {
-    fn clone(&self) -> Self {
-        PrgStream {
-            stream: self.stream.clone()
-        }
-    }
-}
+// impl Clone for PrgStream {
+//     fn clone(&self) -> Self {
+//         PrgStream {
+//             stream: self.stream.clone()
+//         }
+//     }
+// }
 
 pub struct PrgOutput {
     pub bits: (bool, bool),
