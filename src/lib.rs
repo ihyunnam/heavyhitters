@@ -5,7 +5,7 @@ pub mod config;
 pub mod dpf;
 pub mod fastfield;
 mod field;
-pub mod mpc;
+// pub mod mpc;
 pub mod prg;
 // pub mod rpc;
 // pub mod sketch;
@@ -15,7 +15,7 @@ extern crate lazy_static;
 
 pub use crate::field::Dummy;
 pub use crate::field::FieldElm;
-pub use crate::rpc::CollectorClient;
+// pub use crate::rpc::CollectorClient;
 
 // Additive group, such as (Z_n, +)
 pub trait Group {
