@@ -22,7 +22,7 @@ pub struct FieldElmBn254 {
     value: Fr,
 }
 
-impl Serialize for FieldElmBn254 {
+impl SerializeSerde for FieldElmBn254 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -35,7 +35,7 @@ impl Serialize for FieldElmBn254 {
     }
 }
 
-impl<'de> Deserialize<'de> for FieldElmBn254 {
+impl<'de> DeserializeSerde <'de> for FieldElmBn254 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
