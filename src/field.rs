@@ -17,7 +17,7 @@ pub struct FieldElm {
     value: BigUint,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldElmBn254 {
     value: Fr,
 }
