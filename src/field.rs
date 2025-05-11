@@ -478,7 +478,7 @@ impl crate::Group for FieldElmBn254 {
     fn reduce(&mut self) {
         // self.value %= &Fr::MODULUS;
         let value_bytes = self.value.into_bigint().to_bytes_be();
-        self.value = Fr::from_be_bytes_mod_order(value_bytes);
+        self.value = Fr::from_be_bytes_mod_order(&value_bytes);
     }
 
     #[inline]
