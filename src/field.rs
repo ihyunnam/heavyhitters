@@ -1,4 +1,5 @@
-use ark_ff::BigInteger;
+use ark_ff::{BigInteger};
+use std::ops::{Mul, Add, Sub, Neg, Div};
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
@@ -454,13 +455,13 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn add(&mut self, other: &Self) {
         //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value += &other.value;
+        self.value.add(&other.value);
         // self.value %= &MODULUS.value;
     }
 
     #[inline]
     fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
+        self.value.mul(&other.value);
         // self.value %= &MODULUS.value;
     }
 
@@ -484,21 +485,22 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn sub(&mut self, other: &Self) {
         // XXX not constant time
-        if self.value < other.value {
-            // self.value += &Fr::MODULUS;
-            // self.value += Fr::from_bigint(Fr::MODULUS).expect("Failed to change MODULUS into Fr.");
-            let mut value_bytes = self.value.into_bigint();
-            value_bytes.add_with_carry(&Fr::MODULUS);
-            self.value = Fr::from_be_bytes_mod_order(&value_bytes.to_bytes_be());
-        }
+        // if self.value < other.value {
+        //     // self.value += &Fr::MODULUS;
+        //     // self.value += Fr::from_bigint(Fr::MODULUS).expect("Failed to change MODULUS into Fr.");
+        //     let mut value_bytes = self.value.into_bigint();
+        //     value_bytes.add_with_carry(&Fr::MODULUS);
+        //     self.value = Fr::from_be_bytes_mod_order(&value_bytes.to_bytes_be());
+        // }
+        self.value.sub(&other.value);
 
-        *self = FieldElmBn254::from(&self.value - &other.value);
+        // *self = FieldElmBn254::from(&self.value - &other.value);
     }
 
     #[inline]
     fn negate(&mut self) {
         // self.value = &Fr::MODULUS - &self.value;
-        self.negate();
+        self.neg();
     }
 }
 
