@@ -1,18 +1,18 @@
-use ark_ff::fields::prime::PrimeField;
-use ark_std::rand_helper::UniformRand;
+use ark_ff::PrimeField;
+use ark_ff::UniformRand;
 use crate::fastfield::FE;
 #[cfg(test)]
 use crate::Share;
 
 use num_bigint::{BigUint, RandBigInt};
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize as DeserializeSerde, Deserializer};
+use serde::{Serialize as SerializeSerde, Serializer};
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::u32;
 use ark_bn254::Fr;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
 pub struct FieldElm {
     value: BigUint,
 }
@@ -73,7 +73,7 @@ impl FieldElm {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
 pub struct Dummy {
     value: u32,
 }
