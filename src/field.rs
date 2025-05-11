@@ -1,3 +1,5 @@
+use ark_ff::fields::prime::PrimeField;
+use ark_std::rand_helper::UniformRand;
 use crate::fastfield::FE;
 #[cfg(test)]
 use crate::Share;
@@ -18,6 +20,31 @@ pub struct FieldElm {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FieldElmBn254 {
     value: Fr,
+}
+
+impl Serialize for FieldElmBn254 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut bytes = vec![];
+        self.value
+            .serialize_compressed(&mut bytes)
+            .map_err(serde::ser::Error::custom)?;
+        bytes.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for FieldElmBn254 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+        let value = Fr::deserialize_compressed(bytes)
+            .map_err(serde::de::Error::custom)?;
+        Ok(FieldElmBn254 { value })
+    }
 }
 
 // 255-bit modulus:   p = 2^255 - 10
