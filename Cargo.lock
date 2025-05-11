@@ -318,6 +318,7 @@ dependencies = [
  "aes-ctr",
  "ark-bn254",
  "ark-ff",
+ "ark-serialize",
  "ark-std",
  "bincode",
  "clap",

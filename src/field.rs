@@ -1,5 +1,7 @@
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
+use ark_std::rand::thread_rng;
 use crate::fastfield::FE;
 #[cfg(test)]
 use crate::Share;
@@ -29,7 +31,7 @@ impl SerializeSerde for FieldElmBn254 {
     {
         let mut bytes = vec![];
         self.value
-            .serialize_compressed(&mut bytes)
+            .serialize_uncompressed(&mut bytes)
             .map_err(serde::ser::Error::custom)?;
         bytes.serialize(serializer)
     }
@@ -41,7 +43,7 @@ impl<'de> DeserializeSerde <'de> for FieldElmBn254 {
         D: Deserializer<'de>,
     {
         let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let value = Fr::deserialize_compressed(bytes)
+        let value = Fr::deserialize_uncompressed(bytes)
             .map_err(serde::de::Error::custom)?;
         Ok(FieldElmBn254 { value })
     }
@@ -473,14 +475,18 @@ impl crate::Group for FieldElmBn254 {
 
     #[inline]
     fn reduce(&mut self) {
-        self.value %= &Fr::MODULUS;
+        // self.value %= &Fr::MODULUS;
+        let value_bytes = self.value.into_bigint().to_bytes_be();
+        self.value = Fr::from_be_bytes_mod_order(value_bytes);
     }
 
     #[inline]
     fn sub(&mut self, other: &Self) {
         // XXX not constant time
         if self.value < other.value {
-            self.value += &Fr::MODULUS;
+            // self.value += &Fr::MODULUS;
+            let sum_bigint = self.value.into_bigint() += &Fr::MODULUS;
+            self.value = Fr::from_be_bytes_mod_order(sum_bigint.to_bytes_be());
         }
 
         *self = FieldElmBn254::from(&self.value - &other.value);
@@ -488,7 +494,8 @@ impl crate::Group for FieldElmBn254 {
 
     #[inline]
     fn negate(&mut self) {
-        self.value = &Fr::MODULUS - &self.value;
+        // self.value = &Fr::MODULUS - &self.value;
+        self.neg_in_place();
     }
 }
 
@@ -496,6 +503,7 @@ impl crate::prg::FromRng for FieldElmBn254 {
     #[inline]
     fn from_rng(&mut self, rng: &mut impl rand::Rng) {
         // self.value = rng.gen_biguint_below(&Fr::MODULUS);
+        let mut rng = thread_rng();
         self.value = Fr::rand(&mut rng);
     }
 }
