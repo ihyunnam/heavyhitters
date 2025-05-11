@@ -488,8 +488,8 @@ impl crate::Group for FieldElmBn254 {
             // self.value += &Fr::MODULUS;
             // self.value += Fr::from_bigint(Fr::MODULUS).expect("Failed to change MODULUS into Fr.");
             let mut value_bytes = self.value.into_bigint();
-            value_bytes += Fr::MODULUS;
-            self.value = Fr::from_bytes_be_mod_order(value_bytes.to_bytes_be());
+            value_bytes.add_with_carry(&Fr::MODULUS);
+            self.value = Fr::from_be_bytes_mod_order(value_bytes.to_bytes_be());
         }
 
         *self = FieldElmBn254::from(&self.value - &other.value);
