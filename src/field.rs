@@ -486,7 +486,7 @@ impl crate::Group for FieldElmBn254 {
         // XXX not constant time
         if self.value < other.value {
             // self.value += &Fr::MODULUS;
-            self.value += Fr::from_bigint(Fr::MODULUS);
+            self.value += Fr::from_bigint(Fr::MODULUS).expect("Failed to change MODULUS into Fr.");
         }
 
         *self = FieldElmBn254::from(&self.value - &other.value);
