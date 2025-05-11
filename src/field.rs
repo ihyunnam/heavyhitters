@@ -8,10 +8,16 @@ use serde::Serialize;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::u32;
+use ark_bn254::Fr;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FieldElm {
     value: BigUint,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct FieldElmBn254 {
+    value: Fr,
 }
 
 // 255-bit modulus:   p = 2^255 - 10
@@ -371,6 +377,104 @@ impl crate::prg::FromRng for FieldElm {
 }
 
 impl crate::Share for FieldElm {}
+
+/* ADDED FOR FieldElmBn254 */
+
+impl From<u32> for FieldElmBn254 {
+    #[inline]
+    fn from(inp: u32) -> Self {
+        FieldElmBn254 {
+            value: Fr::from(inp)
+        }
+    }
+}
+
+impl From<Fr> for FieldElmBn254 {
+    #[inline]
+    fn from(inp: Fr) -> Self {
+        FieldElmBn254 { value: inp }
+    }
+}
+
+impl Ord for FieldElmBn254 {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value.cmp(&other.value)
+    }
+}
+
+impl PartialOrd for FieldElmBn254 {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.value.cmp(&other.value))
+    }
+}
+
+impl crate::Group for FieldElmBn254 {
+    #[inline]
+    fn zero() -> Self {
+        FieldElmBn254::from(0)
+    }
+
+    #[inline]
+    fn one() -> Self {
+        FieldElmBn254::from(1)
+    }
+
+    #[inline]
+    fn add(&mut self, other: &Self) {
+        //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
+        self.value += &other.value;
+        // self.value %= &MODULUS.value;
+    }
+
+    #[inline]
+    fn mul(&mut self, other: &Self) {
+        self.value *= &other.value;
+        // self.value %= &MODULUS.value;
+    }
+
+    #[inline]
+    fn add_lazy(&mut self, other: &Self) {
+        self.value += &other.value;
+    }
+
+    #[inline]
+    fn mul_lazy(&mut self, other: &Self) {
+        self.value *= &other.value;
+    }
+
+    #[inline]
+    fn reduce(&mut self) {
+        self.value %= &Fr::MODULUS;
+    }
+
+    #[inline]
+    fn sub(&mut self, other: &Self) {
+        // XXX not constant time
+        if self.value < other.value {
+            self.value += &Fr::MODULUS;
+        }
+
+        *self = FieldElmBn254::from(&self.value - &other.value);
+    }
+
+    #[inline]
+    fn negate(&mut self) {
+        self.value = &Fr::MODULUS - &self.value;
+    }
+}
+
+impl crate::prg::FromRng for FieldElmBn254 {
+    #[inline]
+    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
+        // self.value = rng.gen_biguint_below(&Fr::MODULUS);
+        self.value = Fr::rand(&mut rng);
+    }
+}
+
+impl crate::Share for FieldElmBn254 {}
+
 
 impl<T> crate::Group for (T, T)
 where

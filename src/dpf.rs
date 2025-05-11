@@ -11,6 +11,19 @@ struct CorWord<T> {
     word: T,
 }
 
+// impl<T: SerializableToBytes, U: SerializableToBytes> DPFKey<T, U> {
+//     pub fn flat(&self) -> Vec<u8> {
+//         let mut out = Vec::new();
+//         out.push(self.key_idx as u8);
+//         out.extend_from_slice(&self.root_seed.key);
+//         for cor_word in &self.cor_words {
+//             out.extend(cor_word.flat());
+//         }
+//         out.extend(self.cor_word_last.flat());
+//         out
+//     }
+// }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DPFKey<T,U> {
     key_idx: bool,
@@ -18,6 +31,17 @@ pub struct DPFKey<T,U> {
     cor_words: Vec<CorWord<T>>,
     cor_word_last: CorWord<U>,
 }
+
+// impl<T: Serialize, U: Serialize> DPFKey<T,U> {
+//     pub fn flat(&self) -> Vec<u8> {
+//         let mut out: Vec<u8> = Vec::new();
+//         out.push(self.key_idx as u8);
+//         out.push(self.root_seed.key);
+//         for cor_word in self.cor_words {
+//             out.push(cor_word);
+//         }
+//     }
+// }
 
 #[derive(Clone)]
 pub struct EvalState {
