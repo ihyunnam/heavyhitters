@@ -486,8 +486,7 @@ impl crate::Group for FieldElmBn254 {
         // XXX not constant time
         if self.value < other.value {
             // self.value += &Fr::MODULUS;
-            let sum_bigint = self.value.into_bigint() + Fr::MODULUS;
-            self.value = Fr::from_be_bytes_mod_order(sum_bigint.to_bytes_be());
+            self.value += Fr::from_bigint(Fr::MODULUS);
         }
 
         *self = FieldElmBn254::from(&self.value - &other.value);
