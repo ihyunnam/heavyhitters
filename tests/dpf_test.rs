@@ -18,7 +18,7 @@ fn dpf_complete() {
         let alpha_eval = u32_to_bits(nbits, i);
 
         println!("Alpha: {:?}", alpha);
-        for j in 0..((nbits-1) as usize) {
+        for j in 0..((nbits-1) as usize) {  // nbits - 1 skips root (no need for us because 1. reversed and 2. root not included)
             if j < 2 {
                 continue;
             }

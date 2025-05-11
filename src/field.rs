@@ -23,7 +23,7 @@ pub struct FieldElm {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldElmBn254 {
-    value: Fr,
+    pub value: Fr,
 }
 
 impl SerializeSerde for FieldElmBn254 {
@@ -477,6 +477,7 @@ impl crate::Group for FieldElmBn254 {
 
     #[inline]
     fn reduce(&mut self) {
+        println!("REDUCE");
         // self.value %= &Fr::MODULUS;
         let value_bytes = self.value.into_bigint().to_bytes_be();
         self.value = Fr::from_be_bytes_mod_order(&value_bytes);
