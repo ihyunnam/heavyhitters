@@ -500,7 +500,7 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn negate(&mut self) {
         // self.value = &Fr::MODULUS - &self.value;
-        self.neg();
+        self.value.neg();
     }
 }
 
