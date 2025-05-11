@@ -15,6 +15,7 @@ extern crate lazy_static;
 
 pub use crate::field::Dummy;
 pub use crate::field::FieldElm;
+pub use crate::field::FieldElmBn254;
 // pub use crate::rpc::CollectorClient;
 
 // Additive group, such as (Z_n, +)
