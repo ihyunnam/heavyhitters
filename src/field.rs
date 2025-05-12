@@ -19,7 +19,7 @@ use ark_bn254::Fr;
 
 #[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
 pub struct FieldElm {
-    value: BigUint,
+    pub value: BigUint,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -421,6 +421,15 @@ impl From<u32> for FieldElmBn254 {
     }
 }
 
+impl From<u128> for FieldElmBn254 {
+    #[inline]
+    fn from(inp: u128) -> Self {
+        FieldElmBn254 {
+            value: Fr::from(inp)
+        }
+    }
+}
+
 impl From<Fr> for FieldElmBn254 {
     #[inline]
     fn from(inp: Fr) -> Self {
@@ -445,24 +454,24 @@ impl PartialOrd for FieldElmBn254 {
 impl crate::Group for FieldElmBn254 {
     #[inline]
     fn zero() -> Self {
-        FieldElmBn254::from(0)
+        FieldElmBn254::from(0u32)
     }
 
     #[inline]
     fn one() -> Self {
-        FieldElmBn254::from(1)
+        FieldElmBn254::from(1u32)
     }
 
     #[inline]
     fn add(&mut self, other: &Self) {
         //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value.add(&other.value);
+        self.value = self.value.add(&other.value);
         // self.value %= &MODULUS.value;
     }
 
     #[inline]
     fn mul(&mut self, other: &Self) {
-        self.value.mul(&other.value);
+        // self.value = self.value.mul(&other.value);
         // self.value %= &MODULUS.value;
     }
 
@@ -494,7 +503,7 @@ impl crate::Group for FieldElmBn254 {
         //     value_bytes.add_with_carry(&Fr::MODULUS);
         //     self.value = Fr::from_be_bytes_mod_order(&value_bytes.to_bytes_be());
         // }
-        self.value.sub(&other.value);
+        self.value = self.value.sub(&other.value);
 
         // *self = FieldElmBn254::from(&self.value - &other.value);
     }
@@ -502,7 +511,7 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn negate(&mut self) {
         // self.value = &Fr::MODULUS - &self.value;
-        self.value.neg();
+        self.value = self.value.neg();
     }
 }
 
@@ -599,9 +608,9 @@ mod tests {
 
     #[test]
     fn add() {
-        let mut res = FieldElm::zero();
-        let one = FieldElm::from(1);
-        let two = FieldElm::from(2);
+        let mut res = FieldElmBn254::zero();    // PASSES
+        let one = FieldElmBn254::from(1u32);
+        let two = FieldElmBn254::from(2u32);
         res.add(&one);
         res.add(&one);
         assert_eq!(two, res);
@@ -637,10 +646,10 @@ mod tests {
 
     #[test]
     fn negate() {
-        let zero = FieldElm::zero();
-        let x = FieldElm::from(1123123);
-        let mut negx = FieldElm::from(1123123);
-        let mut res = FieldElm::zero();
+        let zero = FieldElmBn254::zero();   // PASSES
+        let x = FieldElmBn254::from(1123123u128);
+        let mut negx = FieldElmBn254::from(1123123u128);
+        let mut res = FieldElmBn254::zero();
 
         negx.negate();
         res.add(&x);
@@ -650,22 +659,22 @@ mod tests {
 
     #[test]
     fn rand() {
-        let zero = FieldElm::zero();
-        let nonzero = FieldElm::random();
+        let zero = FieldElmBn254::zero();   // PASSES
+        let nonzero = FieldElmBn254::random();
         assert!(zero != nonzero);
     }
 
     #[test]
     fn sub() {
-        let zero = FieldElm::zero();
-        let mut x = FieldElm::from(1123123);
+        let zero = FieldElmBn254::zero();   // PASSES
+        let mut x = FieldElmBn254::from(1123123u32);
         let xp = x.clone();
         x.sub(&xp);
         assert_eq!(x, zero);
 
-        let mut y = FieldElm::from(7);
-        y.sub(&FieldElm::from(3));
-        let exp2 = FieldElm::from(4);
+        let mut y = FieldElmBn254::from(7u32);
+        y.sub(&FieldElmBn254::from(3u32));
+        let exp2 = FieldElmBn254::from(4u32);
         assert_eq!(y, exp2);
     }
 
