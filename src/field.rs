@@ -4,6 +4,7 @@ use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
 use ark_std::rand::thread_rng;
+use ark_std::rand::{Rng, RngCore};
 use crate::fastfield::FE;
 #[cfg(test)]
 use crate::Share;
@@ -155,7 +156,7 @@ impl crate::Group for Dummy {
 
 impl crate::prg::FromRng for Dummy {
     fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        RandBigInt::gen_biguint_below(rng, &MODULUS.value);
+        // RandBigInt::gen_biguint_below(rng, &MODULUS.value);
     }
 }
 
@@ -403,7 +404,7 @@ impl crate::Group for FieldElm {
 impl crate::prg::FromRng for FieldElm {
     #[inline]
     fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        self.value = rng.gen_biguint_below(&MODULUS.value);
+        // self.value = rng.gen_biguint_below(&MODULUS.value);
     }
 }
 
