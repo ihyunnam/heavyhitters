@@ -6,63 +6,57 @@ use ark_ff::{PrimeField, BigInteger};
 
 #[test]
 fn dpf_complete() {
-    let nbits = 5;
-    let alpha = u32_to_bits(nbits, 21);
-    let betas = vec![
-        FieldElm::from(1),
-        FieldElm::from(1),
-        FieldElm::from(1),
-        FieldElm::from(1),
-    ];
-    // let beta_last = fastfield::FE::from(32u32);
-    let beta_last = FieldElm::from(1);
-    // also passes for 'let beta_last = FieldElm::from(1u32);'
+    const NBITS: u8 = 8;
+    let alpha = u32_to_bits(NBITS, 2);
+    println!("alpha {:?}", alpha);
+    let betas = vec![FieldElm::from(1), FieldElm::from(2), FieldElm::from(3), FieldElm::from(4), FieldElm::from(5), FieldElm::from(6), FieldElm::from(7)];
+    let beta_last = FieldElm::from(8);
     let (key0, key1) = DPFKey::gen(&alpha, &betas, &beta_last);
-    // let mut rng: rand::prelude::ThreadRng = rand::thread_rng();
-    let fr = Fr::from(1<<31);
-    println!("fr {:?}", fr);
-    let fr_bigint = num_bigint::BigUint::from_bytes_be(&fr.into_bigint().to_bytes_be());
-    let fr_fieldelm: FieldElm = FieldElm::from(fr_bigint);
-    // println!("fr arkworks bigint {:?}", fr.into_bigint().to_string());
-    // println!("fr biguint {:?}", fr_bigint);  // CONFIRMED SAME 
-    for i in 0..(1 << nbits) {
-        let alpha_eval = u32_to_bits(nbits, i);
-
-        println!("Alpha: {:?}", alpha);
-        for j in 0..((nbits-1) as usize) {  // nbits - 1 skips root (no need for us because 1. reversed and 2. root not included)
+    let leaf_level_indices = [0,2,3,5]; // We want to select 2
+    
+    let mut alpha_eval_collected0 = Vec::new();
+    let mut alpha_eval_collected1 = Vec::new();
+    let mut level_eval0: [FieldElm; NBITS as usize] = [FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero()];
+    let mut level_eval1: [FieldElm; NBITS as usize] = [FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero(),FieldElm::zero()];
+    
+    for i in leaf_level_indices {
+        let alpha_eval = u32_to_bits(NBITS, i);
+        println!("alpha_eval {:?}", alpha_eval);
+        for j in 0..((NBITS - 1) as usize) {  // NBITS - 1 skips root (no need for us because 1. reversed and 2. root not included)
             if j < 2 {
                 continue;
             }
+            println!("j {:?}", j);
 
-            let mut eval0 = key0.eval(&alpha_eval[0..j].to_vec());
-            let mut eval1 = key1.eval(&alpha_eval[0..j].to_vec());
-            let mut tmp = FieldElm::zero();
-            // println!("tmp zero {:?}", tmp.value);    // CHECKED CORRECT
+            let mut skip = false;
 
-            // println!("SUM {:?}", eval0.0[j - 2].value + eval1.0[j - 2].value);
-            // let eval0_fr = eval0.0[j - 2].value
-            eval0.0[j - 2].mul(&fr_fieldelm);
-            tmp.add(&eval0.0[j - 2]);    // Modified in place
-            println!("eval0.0[j - 2] {:?}", eval0.0[j - 2]);
-            eval1.0[j - 2].mul(&fr_fieldelm);
-            tmp.add(&eval1.0[j - 2]);   // Modified in place
-            println!("eval1.0[j - 2] {:?}", eval1.0[j - 2]);
-            // println!("after add {:?}", tmp.value);
-            println!("[{:?}] Tmp {:?} = {:?}", alpha_eval, j, tmp);
-            let mut betas_in_place_mul: FieldElm = betas[j - 2].clone();
-            betas_in_place_mul.mul(&fr_fieldelm);
-            println!("betas_in_place_mul {:?}", betas_in_place_mul);
-            // let recover_fr = Fr::from(betas_in_place_mul.clone().value); // CHECKED CORRECT
-            
-            // Sending as bytes // CHECKED CORRECT
-            // let serial = bincode::serialize(&betas_in_place_mul.clone()).unwrap();
-            // let deserial: FieldElm = bincode::deserialize(&serial).unwrap();
-            // println!("deserialized betas in place mul {:?}", deserial);
-            // let recover_fr = Fr::from(deserial.value); // CHECKED CORRECT
-            // println!("recover fr {:?}", recover_fr);
+            // SERVER ZERO
+            if !alpha_eval_collected0.contains(&alpha_eval[0..j-1].to_vec()) {
+                let mut eval0 = key0.eval(&alpha_eval[0..j].to_vec());
+                alpha_eval_collected0.push(alpha_eval[0..j-1].to_vec());  
+                level_eval0[j-2].add(&eval0.0[j-2]);
+                println!("added to {:?}", level_eval0[j-2]);
+            } else {
+                skip = true;
+            }
+
+            // SERVER ONE
+            if !alpha_eval_collected1.contains(&alpha_eval[0..j-1].to_vec()) {
+                let mut eval1 = key1.eval(&alpha_eval[0..j].to_vec());
+                alpha_eval_collected1.push(alpha_eval[0..j-1].to_vec());  
+                level_eval1[j-2].add(&eval1.0[j-2]);
+            } else {
+                skip = true;
+            }
+            if skip { continue; }
+           
+            level_eval0[j-2].add(&level_eval1[j-2]);
+            let tmp = level_eval0[j-2].clone();
             if alpha[0..j-1] == alpha_eval[0..j-1] {
+                println!("tmp {:?}", tmp);
+                println!("betas[j-2] {:?}", betas[j-2]);
                 assert_eq!(
-                    betas_in_place_mul,
+                    betas[j-2],
                     tmp,
                     "[Level {:?}] Value incorrect at {:?}",
                     j,

@@ -60,6 +60,7 @@ pub fn u32_to_bits(nbits: u8, input: u32) -> Vec<bool> {
         let bit = (input & (1 << i)) != 0;
         out.push(bit);
     }
+    out.reverse();
     out
 }
 
