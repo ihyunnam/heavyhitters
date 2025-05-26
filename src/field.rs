@@ -1,5 +1,5 @@
 use ark_ff::{BigInteger};
-use std::ops::{Mul, Add, Sub, Neg, Div};
+use std::ops::{MulAssign, Add, Sub, Neg, Div};
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
@@ -472,22 +472,25 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn mul(&mut self, other: &Self) {
         // self.value = self.value.mul(&other.value);
+        self.value.mul_assign(&other.value);
         // self.value %= &MODULUS.value;
     }
 
     #[inline]
     fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
+        // self.value += &other.value;
+        self.value = self.value.add(&other.value);
     }
 
     #[inline]
     fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
+        // self.value *= &other.value;
+        self.value.mul_assign(&other.value);
     }
 
     #[inline]
     fn reduce(&mut self) {
-        println!("REDUCE");
+        // println!("REDUCE");
         // self.value %= &Fr::MODULUS;
         let value_bytes = self.value.into_bigint().to_bytes_be();
         self.value = Fr::from_be_bytes_mod_order(&value_bytes);
@@ -636,12 +639,12 @@ mod tests {
 
     #[test]
     fn mul_big2() {
-        let mut res = FieldElm::zero();
-        let two = FieldElm::from(2);
-        let eight = FieldElm::from(8);
+        let mut res = FieldElmBn254::zero();
+        let two = FieldElmBn254::from(2u32);
+        let eight = FieldElmBn254::from(8u32);
         res.add(&two);
         res.mul(&eight);
-        assert_eq!(res, FieldElm::from(16));
+        assert_eq!(res, FieldElmBn254::from(16u32));
     }
 
     #[test]

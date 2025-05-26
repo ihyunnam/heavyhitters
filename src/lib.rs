@@ -17,7 +17,7 @@ pub use crate::field::Dummy;
 pub use crate::field::FieldElm;
 pub use crate::field::FieldElmBn254;
 // pub use crate::rpc::CollectorClient;
-
+use primitive_types::U512;
 // Additive group, such as (Z_n, +)
 pub trait Group {
     fn zero() -> Self;
@@ -52,15 +52,33 @@ pub trait Share: Group + prg::FromRng + Clone {
     }
 }
 
+pub fn u512_to_bits(nbits: usize, input: U512) -> Vec<bool> {
+    // assert!(nbits <= 512);
+
+    let mut out: Vec<bool> = Vec::new();
+    for i in 0..nbits-3 {
+        let bit = (input & (U512::from(1) << i)) != U512::zero();
+        out.push(bit);
+    }
+    out.reverse();
+    out.push(false);
+    out.push(false);
+    out.push(false);
+    out
+}
+
 pub fn u32_to_bits(nbits: u8, input: u32) -> Vec<bool> {
     assert!(nbits <= 32);
 
     let mut out: Vec<bool> = Vec::new();
-    for i in 0..nbits {
+    for i in 0..nbits-3 {
         let bit = (input & (1 << i)) != 0;
         out.push(bit);
     }
     out.reverse();
+    out.push(false);
+    out.push(false);
+    out.push(false);
     out
 }
 
