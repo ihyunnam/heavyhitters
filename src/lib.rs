@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn share() {
-        let val = FieldElm::random();
+        let val = FieldElmBn254::random();
         let (s0, s1) = val.share();
-        let mut out = FieldElm::zero();
+        let mut out = FieldElmBn254::zero();
         out.add(&s0);
         out.add(&s1);
         assert_eq!(out, val);

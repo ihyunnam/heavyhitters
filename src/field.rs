@@ -1,5 +1,5 @@
 use ark_ff::{BigInteger};
-use std::ops::{MulAssign, Add, Sub, Neg, Div};
+use std::ops::{SubAssign, AddAssign, MulAssign, Add, Sub, Neg, Div};
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
 use ark_ff::UniformRand;
@@ -32,9 +32,9 @@ impl SerializeSerde for FieldElmBn254 {
     where
         S: Serializer,
     {
-        let mut bytes = vec![];
+        let mut bytes = [0u8;32];
         self.value
-            .serialize_uncompressed(&mut bytes)
+            .serialize_uncompressed(&mut bytes[..])
             .map_err(serde::ser::Error::custom)?;
         bytes.serialize(serializer)
     }
@@ -45,8 +45,8 @@ impl<'de> DeserializeSerde <'de> for FieldElmBn254 {
     where
         D: Deserializer<'de>,
     {
-        let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let value = Fr::deserialize_uncompressed(bytes)
+        let bytes: [u8;32] = serde::Deserialize::deserialize(deserializer)?;
+        let value = Fr::deserialize_uncompressed(&bytes[..])
             .map_err(serde::de::Error::custom)?;
         Ok(FieldElmBn254 { value })
     }
@@ -465,7 +465,7 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn add(&mut self, other: &Self) {
         //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value = self.value.add(&other.value);
+        self.value.add_assign(&other.value);
         // self.value %= &MODULUS.value;
     }
 
@@ -479,7 +479,7 @@ impl crate::Group for FieldElmBn254 {
     #[inline]
     fn add_lazy(&mut self, other: &Self) {
         // self.value += &other.value;
-        self.value = self.value.add(&other.value);
+        self.value.add_assign(&other.value);
     }
 
     #[inline]
@@ -490,10 +490,11 @@ impl crate::Group for FieldElmBn254 {
 
     #[inline]
     fn reduce(&mut self) {
+        println!("REDUCE1");
         // println!("REDUCE");
         // self.value %= &Fr::MODULUS;
-        let value_bytes = self.value.into_bigint().to_bytes_be();
-        self.value = Fr::from_be_bytes_mod_order(&value_bytes);
+        // let value_bytes = self.value.into_bigint().to_bytes_be();
+        // self.value = Fr::from_be_bytes_mod_order(&value_bytes);
     }
 
     #[inline]
@@ -506,7 +507,7 @@ impl crate::Group for FieldElmBn254 {
         //     value_bytes.add_with_carry(&Fr::MODULUS);
         //     self.value = Fr::from_be_bytes_mod_order(&value_bytes.to_bytes_be());
         // }
-        self.value = self.value.sub(&other.value);
+        self.value.sub_assign(&other.value);
 
         // *self = FieldElmBn254::from(&self.value - &other.value);
     }
@@ -570,8 +571,9 @@ where
 
     #[inline]
     fn reduce(&mut self) {
-        self.0.reduce();
-        self.1.reduce();
+        // self.0.reduce();
+        // self.1.reduce();
+        println!("REDUCE2");
     }
 
     #[inline]
@@ -582,12 +584,14 @@ where
 
     #[inline]
     fn sub(&mut self, other: &Self) {
-        let mut inv0 = other.0.clone();
-        let mut inv1 = other.1.clone();
-        inv0.negate();
-        inv1.negate();
-        self.0.add(&inv0);
-        self.1.add(&inv1);
+        // let mut inv0 = other.0.clone();
+        // let mut inv1 = other.1.clone();
+        // inv0.negate();
+        // inv1.negate();
+        // self.0.add(&inv0);
+        // self.1.add(&inv1);
+        self.0.sub(&other.0);
+        self.1.sub(&other.1);
     }
 }
 
