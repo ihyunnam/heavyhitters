@@ -155,7 +155,7 @@ fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (pr
 
 
 /// All-prefix DPF implementation.
-impl<T,U> DPFKey<T>
+impl<T> DPFKey<T>
 where
     T: prg::FromRng + Clone + Group + std::fmt::Debug,
     U: prg::FromRng + Clone + Group + std::fmt::Debug
@@ -184,13 +184,13 @@ where
         }
 
         (
-            DPFKey::<T,U> {
+            DPFKey::<T> {
                 key_idx: false,
                 root_seed: root_seeds.0,
                 cor_words: cor_words.clone(),
                 // cor_word_last: last_cor_word[0].clone(),
             },
-            DPFKey::<T,U> {
+            DPFKey::<T> {
                 key_idx: true,
                 root_seed: root_seeds.1,
                 cor_words,
