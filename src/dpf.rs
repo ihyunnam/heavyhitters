@@ -25,14 +25,14 @@ struct CorWord<T> {
 // }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DPFKey<T,U> {
+pub struct DPFKey<T> {
     key_idx: bool,
     root_seed: prg::PrgSeed,
     cor_words: Vec<CorWord<T>>,
     // cor_word_last: CorWord<U>,
 }
 
-// impl<T: Serialize, U: Serialize> DPFKey<T,U> {
+// impl<T: Serialize, U: Serialize> DPFKey<T> {
 //     pub fn flat(&self) -> Vec<u8> {
 //         let mut out: Vec<u8> = Vec::new();
 //         out.push(self.key_idx as u8);
@@ -155,13 +155,13 @@ fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (pr
 
 
 /// All-prefix DPF implementation.
-impl<T,U> DPFKey<T,U>
+impl<T,U> DPFKey<T>
 where
     T: prg::FromRng + Clone + Group + std::fmt::Debug,
     U: prg::FromRng + Clone + Group + std::fmt::Debug
 {
 
-    pub fn gen(alpha_bits: &[bool], values: &[T], value_last: &U) -> (DPFKey<T,U>, DPFKey<T,U>) {
+    pub fn gen(alpha_bits: &[bool], values: &[T]) -> (DPFKey<T>, DPFKey<T>) {
         debug_assert!(alpha_bits.len() == values.len() + 1);
 
         let root_seeds = (prg::PrgSeed::random(), prg::PrgSeed::random());
@@ -294,7 +294,7 @@ where
     pub fn gen_from_str(s: &str) -> (Self, Self) {
         let bits = crate::string_to_bits(s);
         let values = vec![T::one(); bits.len()-1];
-        DPFKey::gen(&bits, &values, &U::one())
+        DPFKey::gen(&bits, &values)
     }
 
     pub fn domain_size(&self) -> usize {
