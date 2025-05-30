@@ -1,721 +1,303 @@
-use ark_ff::{BigInteger};
-use std::ops::{Mul, Add, Sub, Neg, Div};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
-use ark_ff::PrimeField;
-use ark_ff::UniformRand;
-use ark_std::rand::thread_rng;
-use crate::fastfield::FE;
-#[cfg(test)]
-use crate::Share;
+use crate::prg;
+use crate::Group;
 
-use num_bigint::{BigUint, RandBigInt};
-use serde::{Deserialize as DeserializeSerde, Deserializer};
-use serde::{Serialize as SerializeSerde, Serializer};
-use std::cmp::Ordering;
-use std::convert::TryInto;
-use std::u32;
-use ark_bn254::Fr;
+use serde::Deserialize;
+use serde::Serialize;
 
-#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
-pub struct FieldElm {
-    value: BigUint,
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct CorWord<T> {
+    seed: prg::PrgSeed,
+    bits: (bool, bool),
+    word: T,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FieldElmBn254 {
-    pub value: Fr,
+// impl<T: SerializableToBytes, U: SerializableToBytes> DPFKey<T, U> {
+//     pub fn flat(&self) -> Vec<u8> {
+//         let mut out = Vec::new();
+//         out.push(self.key_idx as u8);
+//         out.extend_from_slice(&self.root_seed.key);
+//         for cor_word in &self.cor_words {
+//             out.extend(cor_word.flat());
+//         }
+//         out.extend(self.cor_word_last.flat());
+//         out
+//     }
+// }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DPFKey<T,U> {
+    key_idx: bool,
+    root_seed: prg::PrgSeed,
+    cor_words: Vec<CorWord<T>>,
+    cor_word_last: CorWord<U>,
 }
 
-impl SerializeSerde for FieldElmBn254 {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut bytes = vec![];
-        self.value
-            .serialize_uncompressed(&mut bytes)
-            .map_err(serde::ser::Error::custom)?;
-        bytes.serialize(serializer)
-    }
+// impl<T: Serialize, U: Serialize> DPFKey<T,U> {
+//     pub fn flat(&self) -> Vec<u8> {
+//         let mut out: Vec<u8> = Vec::new();
+//         out.push(self.key_idx as u8);
+//         out.push(self.root_seed.key);
+//         for cor_word in self.cor_words {
+//             out.push(cor_word);
+//         }
+//     }
+// }
+
+#[derive(Clone)]
+pub struct EvalState {
+    level: usize,
+    seed: prg::PrgSeed,
+    bit: bool,
 }
 
-impl<'de> DeserializeSerde <'de> for FieldElmBn254 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let value = Fr::deserialize_uncompressed(bytes)
-            .map_err(serde::de::Error::custom)?;
-        Ok(FieldElmBn254 { value })
-    }
+trait TupleMapToExt<T, U> {
+    type Output;
+    fn map<F: FnMut(&T) -> U>(&self, f: F) -> Self::Output;
 }
 
-// 255-bit modulus:   p = 2^255 - 10
-const MODULUS_STR: &[u8] = b"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed";
+type TupleMutIter<'a, T> =
+    std::iter::Chain<std::iter::Once<(bool, &'a mut T)>, std::iter::Once<(bool, &'a mut T)>>;
 
-// 127-bit modulus:   p = 2^127 - 1
-//const MODULUS_STR: &[u8] = b"7fffffffffffffffffffffffffffffff";
-
-//  63-bit modulus:   p = 2^63 - 25;
-const MODULUS_64: u64 = 9223372036854775783u64;
-const MODULUS_64_BIG: u128 = 9223372036854775783u128;
-
-lazy_static! {
-    static ref MODULUS: FieldElm =
-        FieldElm::from_hex(MODULUS_STR).expect("Could not parse modulus");
-    static ref MODULUS_DUMMY: Dummy = Dummy::from(7);
+trait TupleExt<T> {
+    fn map_mut<F: Fn(&mut T)>(&mut self, f: F);
+    fn get(&self, val: bool) -> &T;
+    fn get_mut(&mut self, val: bool) -> &mut T;
+    fn iter_mut(&mut self) -> TupleMutIter<T>;
 }
 
-impl FieldElm {
-    pub fn from_hex(inp: &[u8]) -> Option<FieldElm> {
-        BigUint::parse_bytes(inp, 16).map(|value| FieldElm { value })
-    }
+impl<T, U> TupleMapToExt<T, U> for (T, T) {
+    type Output = (U, U);
 
-    pub fn to_vec(&self, len: usize) -> Vec<FieldElm> {
-        std::iter::repeat(self.clone()).take(len).collect()
+    #[inline(always)]
+    fn map<F: FnMut(&T) -> U>(&self, mut f: F) -> Self::Output {
+        (f(&self.0), f(&self.1))
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
-pub struct Dummy {
-    value: u32,
-}
-
-/*******/
-impl From<u32> for Dummy {
-    fn from(_inp: u32) -> Self {
-        Dummy { value: 0 }
-    }
-}
-
-impl From<BigUint> for Dummy {
-    fn from(_inp: BigUint) -> Self {
-        Dummy { value: 0 }
-    }
-}
-
-impl Ord for Dummy {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
-    }
-}
-
-impl PartialOrd for Dummy {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.value.cmp(&other.value))
-    }
-}
-
-impl crate::Group for Dummy {
-    fn zero() -> Self {
-        Dummy::from(0)
+impl<T> TupleExt<T> for (T, T) {
+    #[inline(always)]
+    fn map_mut<F: Fn(&mut T)>(&mut self, f: F) {
+        f(&mut self.0);
+        f(&mut self.1);
     }
 
-    fn one() -> Self {
-        Dummy::from(1)
-    }
-
-    fn add(&mut self, other: &Self) {
-        //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value += &other.value;
-        self.value %= &MODULUS.value;
-    }
-
-    fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
-        self.value %= &MODULUS.value;
-    }
-
-    fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
-    }
-
-    fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
-    }
-
-    fn reduce(&mut self) {
-        self.value %= &MODULUS.value;
-    }
-
-    fn sub(&mut self, other: &Self) {
-        // XXX not constant time
-        if self.value < other.value {
-            self.value += &MODULUS_DUMMY.value;
-        }
-
-        *self = Dummy::from(self.value - other.value);
-    }
-
-    fn negate(&mut self) {
-        self.value = MODULUS_DUMMY.value - self.value;
-    }
-}
-
-impl crate::prg::FromRng for Dummy {
-    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        // RandBigInt::gen_biguint_below(rng, &MODULUS.value);
-    }
-}
-
-impl crate::Share for Dummy {}
-
-impl crate::Group for u64 {
-    #[inline]
-    fn zero() -> Self {
-        0u64
-    }
-
-    #[inline]
-    fn one() -> Self {
-        1u64
-    }
-
-    #[inline]
-    fn add(&mut self, other: &Self) {
-        debug_assert!(*self < MODULUS_64);
-        debug_assert!(*other < MODULUS_64);
-        *self += other;
-        *self %= MODULUS_64;
-    }
-
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        debug_assert!(*self < MODULUS_64);
-        debug_assert!(*other < MODULUS_64);
-        let s64: u64 = *self;
-        let o64: u64 = *other;
-        let a: u128 = s64.into();
-        let b: u128 = o64.into();
-
-        let res = (a * b) % MODULUS_64_BIG;
-        *self = res.try_into().unwrap();
-    }
-
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.add(other);
-    }
-
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.mul(other);
-    }
-
-    #[inline]
-    fn reduce(&mut self) {}
-
-    #[inline]
-    fn sub(&mut self, other: &Self) {
-        debug_assert!(*self < MODULUS_64);
-        debug_assert!(*other < MODULUS_64);
-        let mut neg = *other;
-        neg.negate();
-        self.add(&neg);
-    }
-
-    #[inline]
-    fn negate(&mut self) {
-        debug_assert!(*self < MODULUS_64);
-        *self = MODULUS_64 - *self;
-        *self %= MODULUS_64;
-    }
-}
-
-impl crate::prg::FromRng for u64 {
-    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        *self = u64::MAX;
-        while *self >= MODULUS_64 {
-            *self = rng.next_u64();
-            *self &= 0x7fffffffffffffffu64;
+    #[inline(always)]
+    fn get(&self, val: bool) -> &T {
+        match val {
+            false => &self.0,
+            true => &self.1,
         }
     }
-}
 
-impl crate::Share for u64 {}
-
-impl crate::Group for FE {
-    #[inline]
-    fn zero() -> Self {
-        FE::from(0u8)
+    #[inline(always)]
+    fn get_mut(&mut self, val: bool) -> &mut T {
+        match val {
+            false => &mut self.0,
+            true => &mut self.1,
+        }
     }
 
-    #[inline]
-    fn one() -> Self {
-        FE::from(1u8)
-    }
-
-    #[inline]
-    fn add(&mut self, other: &Self) {
-        use std::ops::Add;
-        *self = <FE as Add>::add(*self, *other);
-    }
-
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        use std::ops::Mul;
-        *self = <FE as Mul>::mul(*self, *other);
-    }
-
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.add(other);
-    }
-
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.mul(other);
-    }
-
-    #[inline]
-    fn reduce(&mut self) {}
-
-    #[inline]
-    fn sub(&mut self, other: &Self) {
-        use std::ops::Sub;
-        *self = <FE as Sub>::sub(*self, *other);
-    }
-
-    #[inline]
-    fn negate(&mut self) {
-        use std::ops::Neg;
-        *self = self.neg();
+    fn iter_mut(&mut self) -> TupleMutIter<T> {
+        std::iter::once((false, &mut self.0)).chain(std::iter::once((true, &mut self.1)))
     }
 }
 
-impl crate::prg::FromRng for FE {
-    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        loop {
-            let v = FE::from_u64_unbiased(rng.next_u64());
-            match v {
-                Some(x) => {
-                    *self = x;
-                    break;
-                }
-                None => continue,
+fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (prg::PrgSeed, prg::PrgSeed)) -> CorWord<W>
+    where W: prg::FromRng + Clone + Group + std::fmt::Debug
+{
+    let data = seeds.map(|s| s.expand());
+
+    // If alpha[i] = 0:
+    //   Keep = L,  Lose = R
+    // Else
+    //   Keep = R,  Lose = L
+    let keep = bit;
+    let lose = !keep;
+
+    let mut cw = CorWord {
+        seed: data.0.seeds.get(lose) ^ data.1.seeds.get(lose),
+        bits: (
+            data.0.bits.0 ^ data.1.bits.0 ^ bit ^ true,
+            data.0.bits.1 ^ data.1.bits.1 ^ bit,
+        ),
+        word: W::zero(),
+    };
+
+    for (b, seed) in seeds.iter_mut() {
+        *seed = data.get(b).seeds.get(keep).clone();
+
+        if *bits.get(b) {
+            *seed = &*seed ^ &cw.seed;
+        }
+
+        let mut newbit = *data.get(b).bits.get(keep);
+        if *bits.get(b) {
+            newbit ^= cw.bits.get(keep);
+        }
+
+        *bits.get_mut(b) = newbit;
+    }
+
+    let converted = seeds.map(|s| s.convert());
+    cw.word = value;
+    cw.word.sub(&converted.0.word);
+    cw.word.add(&converted.1.word);
+
+    if bits.1 {
+        cw.word.negate();
+    }
+
+    seeds.0 = converted.0.seed;
+    seeds.1 = converted.1.seed;
+
+    cw
+}
+
+
+/// All-prefix DPF implementation.
+impl<T,U> DPFKey<T,U>
+where
+    T: prg::FromRng + Clone + Group + std::fmt::Debug,
+    U: prg::FromRng + Clone + Group + std::fmt::Debug
+{
+
+    pub fn gen(alpha_bits: &[bool], values: &[T], value_last: &U) -> (DPFKey<T,U>, DPFKey<T,U>) {
+        debug_assert!(alpha_bits.len() == values.len() + 1);
+
+        let root_seeds = (prg::PrgSeed::random(), prg::PrgSeed::random());
+        let root_bits = (false, true);
+
+        let mut seeds = root_seeds.clone();
+        let mut bits = root_bits;
+
+        let mut cor_words: Vec<CorWord<T>> = Vec::new();
+        let mut last_cor_word: Vec<CorWord<U>> = Vec::new();
+
+        for (i, &bit) in alpha_bits.iter().enumerate() {
+            let is_last_word = i == values.len();
+            if is_last_word {
+                last_cor_word.push(gen_cor_word::<U>(bit, value_last.clone(), &mut bits, &mut seeds));
+            } else {
+                let cw = gen_cor_word::<T>(bit, values[i].clone(), &mut bits, &mut seeds);
+                cor_words.push(cw);
             }
         }
-    }
-}
 
-impl crate::Share for FE {}
-
-impl Ord for FE {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value().cmp(&other.value())
-    }
-}
-
-impl PartialOrd for FE {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.value().cmp(&other.value()))
-    }
-}
-
-/*******/
-
-impl From<u32> for FieldElm {
-    #[inline]
-    fn from(inp: u32) -> Self {
-        FieldElm {
-            value: BigUint::from(inp),
-        }
-    }
-}
-
-impl From<BigUint> for FieldElm {
-    #[inline]
-    fn from(inp: BigUint) -> Self {
-        FieldElm { value: inp }
-    }
-}
-
-impl Ord for FieldElm {
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
-    }
-}
-
-impl PartialOrd for FieldElm {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.value.cmp(&other.value))
-    }
-}
-
-impl crate::Group for FieldElm {
-    #[inline]
-    fn zero() -> Self {
-        FieldElm::from(0)
+        (
+            DPFKey::<T,U> {
+                key_idx: false,
+                root_seed: root_seeds.0,
+                cor_words: cor_words.clone(),
+                cor_word_last: last_cor_word[0].clone(),
+            },
+            DPFKey::<T,U> {
+                key_idx: true,
+                root_seed: root_seeds.1,
+                cor_words,
+                cor_word_last: last_cor_word[0].clone(),
+            },
+        )
     }
 
-    #[inline]
-    fn one() -> Self {
-        FieldElm::from(1)
-    }
+    pub fn eval_bit(&self, state: &EvalState, dir: bool) -> (EvalState, T) {
+        let tau = state.seed.expand_dir(!dir, dir);
+        let mut seed = tau.seeds.get(dir).clone();
+        let mut new_bit = *tau.bits.get(dir);
 
-    #[inline]
-    fn add(&mut self, other: &Self) {
-        //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value += &other.value;
-        self.value %= &MODULUS.value;
-    }
-
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
-        self.value %= &MODULUS.value;
-    }
-
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
-    }
-
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
-    }
-
-    #[inline]
-    fn reduce(&mut self) {
-        self.value %= &MODULUS.value;
-    }
-
-    #[inline]
-    fn sub(&mut self, other: &Self) {
-        // XXX not constant time
-        if self.value < other.value {
-            self.value += &MODULUS.value;
+        if state.bit {
+            seed = &seed ^ &self.cor_words[state.level].seed;
+            new_bit ^= self.cor_words[state.level].bits.get(dir);
         }
 
-        *self = FieldElm::from(&self.value - &other.value);
+        let converted = seed.convert::<T>();
+        seed = converted.seed;
+
+        let mut word = converted.word;
+        if new_bit {
+            word.add(&self.cor_words[state.level].word);
+        }
+
+        if self.key_idx {
+            word.negate()
+        }
+
+        //println!("server: {:?}, tl = {:?}, Wl = {:?}", self.key_idx, new_bit, word);
+
+        (
+            EvalState {
+                level: state.level + 1,
+                seed,
+                bit: new_bit,
+            },
+            word,
+        )
     }
 
-    #[inline]
-    fn negate(&mut self) {
-        self.value = &MODULUS.value - &self.value;
+    pub fn eval_bit_last(&self, state: &EvalState, dir: bool) -> (EvalState, U) {
+        let tau = state.seed.expand_dir(!dir, dir);
+        let mut seed = tau.seeds.get(dir).clone();
+        let mut new_bit = *tau.bits.get(dir);
+
+        if state.bit {
+            seed = &seed ^ &self.cor_word_last.seed;
+            new_bit ^= self.cor_word_last.bits.get(dir);
+        }
+
+        let converted = seed.convert::<U>();
+        seed = converted.seed;
+
+        let mut word = converted.word;
+        if new_bit {
+            word.add(&self.cor_word_last.word);
+        }
+
+        if self.key_idx {
+            word.negate()
+        }
+
+        (
+            EvalState {
+                level: state.level + 1,
+                seed,
+                bit: new_bit,
+            },
+            word,
+        )
     }
-}
 
-impl crate::prg::FromRng for FieldElm {
-    #[inline]
-    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        // self.value = rng.gen_biguint_below(&MODULUS.value);
-    }
-}
-
-impl crate::Share for FieldElm {}
-
-/* ADDED FOR FieldElmBn254 */
-
-impl From<u32> for FieldElmBn254 {
-    #[inline]
-    fn from(inp: u32) -> Self {
-        FieldElmBn254 {
-            value: Fr::from(inp)
+    pub fn eval_init(&self) -> EvalState {
+        EvalState {
+            level: 0,
+            seed: self.root_seed.clone(),
+            bit: self.key_idx,
         }
     }
-}
 
-impl From<Fr> for FieldElmBn254 {
-    #[inline]
-    fn from(inp: Fr) -> Self {
-        FieldElmBn254 { value: inp }
-    }
-}
+    pub fn eval(&self, idx: &[bool]) -> Vec<T> {
+        debug_assert!(idx.len() <= self.domain_size());
+        debug_assert!(!idx.is_empty());
+        let mut out = vec![];
+        let mut state = self.eval_init();
 
-impl Ord for FieldElmBn254 {
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
-    }
-}
+        for i in 0..idx.len()-1 {
+            let bit = idx[i];
+            let (state_new, word) = self.eval_bit(&state, bit);
+            out.push(word);
+            state = state_new;
+        }
+        // let (_, last) = self.eval_bit_last(&state, *idx.last().unwrap());
 
-impl PartialOrd for FieldElmBn254 {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.value.cmp(&other.value))
-    }
-}
-
-impl crate::Group for FieldElmBn254 {
-    #[inline]
-    fn zero() -> Self {
-        FieldElmBn254::from(0)
+        // (out, last)
+        out
     }
 
-    #[inline]
-    fn one() -> Self {
-        FieldElmBn254::from(1)
+    pub fn gen_from_str(s: &str) -> (Self, Self) {
+        let bits = crate::string_to_bits(s);
+        let values = vec![T::one(); bits.len()-1];
+        DPFKey::gen(&bits, &values, &U::one())
     }
 
-    #[inline]
-    fn add(&mut self, other: &Self) {
-        //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value.add(&other.value);
-        // self.value %= &MODULUS.value;
-    }
-
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
-        // self.value %= &MODULUS.value;
-    }
-
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
-    }
-
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
-    }
-
-    #[inline]
-    fn reduce(&mut self) {
-        // println!("REDUCE");
-        // self.value %= &Fr::MODULUS;
-        let value_bytes = self.value.into_bigint().to_bytes_be();
-        self.value = Fr::from_be_bytes_mod_order(&value_bytes);
-    }
-
-    #[inline]
-    fn sub(&mut self, other: &Self) {
-        // XXX not constant time
-        // if self.value < other.value {
-        //     // self.value += &Fr::MODULUS;
-        //     // self.value += Fr::from_bigint(Fr::MODULUS).expect("Failed to change MODULUS into Fr.");
-        //     let mut value_bytes = self.value.into_bigint();
-        //     value_bytes.add_with_carry(&Fr::MODULUS);
-        //     self.value = Fr::from_be_bytes_mod_order(&value_bytes.to_bytes_be());
-        // }
-        self.value.sub(&other.value);
-
-        // *self = FieldElmBn254::from(&self.value - &other.value);
-    }
-
-    #[inline]
-    fn negate(&mut self) {
-        // self.value = &Fr::MODULUS - &self.value;
-        self.value.neg();
-    }
-}
-
-impl crate::prg::FromRng for FieldElmBn254 {
-    #[inline]
-    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        // self.value = rng.gen_biguint_below(&Fr::MODULUS);
-        let mut rng = thread_rng();
-        self.value = Fr::rand(&mut rng);
-    }
-}
-
-impl crate::Share for FieldElmBn254 {}
-
-
-impl<T> crate::Group for (T, T)
-where
-    T: crate::Group + Clone,
-{
-    #[inline]
-    fn zero() -> Self {
-        (T::zero(), T::zero())
-    }
-
-    #[inline]
-    fn one() -> Self {
-        (T::one(), T::one())
-    }
-
-    #[inline]
-    fn add(&mut self, other: &Self) {
-        self.0.add(&other.0);
-        self.1.add(&other.1);
-    }
-
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        self.0.mul(&other.0);
-        self.1.mul(&other.1);
-    }
-
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.0.add_lazy(&other.0);
-        self.1.add_lazy(&other.1);
-    }
-
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.0.mul_lazy(&other.0);
-        self.1.mul_lazy(&other.1);
-    }
-
-    #[inline]
-    fn reduce(&mut self) {
-        self.0.reduce();
-        self.1.reduce();
-    }
-
-    #[inline]
-    fn negate(&mut self) {
-        self.0.negate();
-        self.1.negate();
-    }
-
-    #[inline]
-    fn sub(&mut self, other: &Self) {
-        let mut inv0 = other.0.clone();
-        let mut inv1 = other.1.clone();
-        inv0.negate();
-        inv1.negate();
-        self.0.add(&inv0);
-        self.1.add(&inv1);
-    }
-}
-
-impl<T> crate::prg::FromRng for (T, T)
-where
-    T: crate::prg::FromRng + crate::Group,
-{
-    fn from_rng(&mut self, mut rng: &mut impl rand::Rng) {
-        self.0 = T::zero();
-        self.1 = T::zero();
-        self.0.from_rng(&mut rng);
-        self.1.from_rng(&mut rng);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::Group;
-
-    #[test]
-    fn add() {
-        let mut res = FieldElmBn254::zero();
-        let one = FieldElmBn254::from(1);
-        let two = FieldElmBn254::from(2);
-        res.add(&one);
-        res.add(&one);
-        assert_eq!(two, res);
-    }
-
-    #[test]
-    fn add_big() {
-        let mut res = FieldElmBn254::zero();
-        let two = FieldElmBn254::from(2);
-        res.add(&two);
-        res.add(&FieldElmBn254 {value: Fr::from_bigint(Fr::MODULUS).unwrap()});
-        assert_eq!(two, res);
-    }
-
-    #[test]
-    fn mul_big() {
-        let mut res = FieldElm::zero();
-        let two = FieldElm::from(2);
-        res.add(&two);
-        res.mul(&MODULUS);
-        assert_eq!(res, FieldElm::zero());
-    }
-
-    #[test]
-    fn mul_big2() {
-        let mut res = FieldElm::zero();
-        let two = FieldElm::from(2);
-        let eight = FieldElm::from(8);
-        res.add(&two);
-        res.mul(&eight);
-        assert_eq!(res, FieldElm::from(16));
-    }
-
-    #[test]
-    fn negate() {
-        let zero = FieldElm::zero();
-        let x = FieldElm::from(1123123);
-        let mut negx = FieldElm::from(1123123);
-        let mut res = FieldElm::zero();
-
-        negx.negate();
-        res.add(&x);
-        res.add(&negx);
-        assert_eq!(zero, res);
-    }
-
-    #[test]
-    fn rand() {
-        let zero = FieldElm::zero();
-        let nonzero = FieldElm::random();
-        assert!(zero != nonzero);
-    }
-
-    #[test]
-    fn sub() {
-        let zero = FieldElm::zero();
-        let mut x = FieldElm::from(1123123);
-        let xp = x.clone();
-        x.sub(&xp);
-        assert_eq!(x, zero);
-
-        let mut y = FieldElm::from(7);
-        y.sub(&FieldElm::from(3));
-        let exp2 = FieldElm::from(4);
-        assert_eq!(y, exp2);
-    }
-
-    #[test]
-    fn add128() {
-        let mut res = u64::zero();
-        let one = 1u64;
-        let two = 2u64;
-        res.add(&one);
-        res.add(&one);
-        assert_eq!(two, res);
-    }
-
-    #[test]
-    fn add_big128() {
-        let mut res = 1u64;
-        let two = 2u64;
-        res.add(&two);
-        res.add(&(MODULUS_64 - 1));
-        assert_eq!(two, res);
-    }
-
-    #[test]
-    fn mul_big128() {
-        let mut res = 0u64;
-        let four = 4u64;
-        res.add(&four);
-        res.mul(&(MODULUS_64 - 1));
-        assert_eq!(res, MODULUS_64 - 4);
-    }
-
-    #[test]
-    fn mul_big2128() {
-        let mut res = u64::zero();
-        let two = 2u64;
-        let eight = 8u64;
-        res.add(&two);
-        res.mul(&eight);
-        assert_eq!(res, 16u64);
-    }
-
-    #[test]
-    fn negate128() {
-        let zero = u64::zero();
-        let x = 1123123u64;
-        let mut negx = 1123123u64;
-        let mut res = 0u64;
-
-        negx.negate();
-        res.add(&x);
-        res.add(&negx);
-        assert_eq!(zero, res);
+    pub fn domain_size(&self) -> usize {
+        self.cor_words.len()
     }
 }
