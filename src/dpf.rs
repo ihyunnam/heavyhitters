@@ -158,7 +158,7 @@ fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (pr
 impl<T> DPFKey<T>
 where
     T: prg::FromRng + Clone + Group + std::fmt::Debug,
-    U: prg::FromRng + Clone + Group + std::fmt::Debug
+    // U: prg::FromRng + Clone + Group + std::fmt::Debug
 {
 
     pub fn gen(alpha_bits: &[bool], values: &[T]) -> (DPFKey<T>, DPFKey<T>) {
