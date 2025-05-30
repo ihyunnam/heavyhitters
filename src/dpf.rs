@@ -279,7 +279,7 @@ where
         let mut out = vec![];
         let mut state = self.eval_init();
 
-        for i in 0..idx.len()-1 {
+        for i in 0..idx.len() {
             let bit = idx[i];
             let (state_new, word) = self.eval_bit(&state, bit);
             out.push(word);
