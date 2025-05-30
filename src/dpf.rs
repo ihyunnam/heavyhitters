@@ -29,7 +29,7 @@ pub struct DPFKey<T,U> {
     key_idx: bool,
     root_seed: prg::PrgSeed,
     cor_words: Vec<CorWord<T>>,
-    cor_word_last: CorWord<U>,
+    // cor_word_last: CorWord<U>,
 }
 
 // impl<T: Serialize, U: Serialize> DPFKey<T,U> {
@@ -171,16 +171,16 @@ where
         let mut bits = root_bits;
 
         let mut cor_words: Vec<CorWord<T>> = Vec::new();
-        let mut last_cor_word: Vec<CorWord<U>> = Vec::new();
+        // let mut last_cor_word: Vec<CorWord<U>> = Vec::new();
 
         for (i, &bit) in alpha_bits.iter().enumerate() {
-            let is_last_word = i == values.len();
-            if is_last_word {
+            // let is_last_word = i == values.len();
+            // if is_last_word {
                 // last_cor_word.push(gen_cor_word::<U>(bit, value_last.clone(), &mut bits, &mut seeds));
-            } else {
+            // } else {
                 let cw = gen_cor_word::<T>(bit, values[i].clone(), &mut bits, &mut seeds);
                 cor_words.push(cw);
-            }
+            // }
         }
 
         (
@@ -188,13 +188,13 @@ where
                 key_idx: false,
                 root_seed: root_seeds.0,
                 cor_words: cor_words.clone(),
-                cor_word_last: last_cor_word[0].clone(),
+                // cor_word_last: last_cor_word[0].clone(),
             },
             DPFKey::<T,U> {
                 key_idx: true,
                 root_seed: root_seeds.1,
                 cor_words,
-                cor_word_last: last_cor_word[0].clone(),
+                // cor_word_last: last_cor_word[0].clone(),
             },
         )
     }
@@ -233,37 +233,37 @@ where
         )
     }
 
-    pub fn eval_bit_last(&self, state: &EvalState, dir: bool) -> (EvalState, U) {
-        let tau = state.seed.expand_dir(!dir, dir);
-        let mut seed = tau.seeds.get(dir).clone();
-        let mut new_bit = *tau.bits.get(dir);
+    // pub fn eval_bit_last(&self, state: &EvalState, dir: bool) -> (EvalState, U) {
+    //     let tau = state.seed.expand_dir(!dir, dir);
+    //     let mut seed = tau.seeds.get(dir).clone();
+    //     let mut new_bit = *tau.bits.get(dir);
 
-        if state.bit {
-            seed = &seed ^ &self.cor_word_last.seed;
-            new_bit ^= self.cor_word_last.bits.get(dir);
-        }
+    //     if state.bit {
+    //         seed = &seed ^ &self.cor_word_last.seed;
+    //         new_bit ^= self.cor_word_last.bits.get(dir);
+    //     }
 
-        let converted = seed.convert::<U>();
-        seed = converted.seed;
+    //     let converted = seed.convert::<U>();
+    //     seed = converted.seed;
 
-        let mut word = converted.word;
-        if new_bit {
-            word.add(&self.cor_word_last.word);
-        }
+    //     let mut word = converted.word;
+    //     if new_bit {
+    //         word.add(&self.cor_word_last.word);
+    //     }
 
-        if self.key_idx {
-            word.negate()
-        }
+    //     if self.key_idx {
+    //         word.negate()
+    //     }
 
-        (
-            EvalState {
-                level: state.level + 1,
-                seed,
-                bit: new_bit,
-            },
-            word,
-        )
-    }
+    //     (
+    //         EvalState {
+    //             level: state.level + 1,
+    //             seed,
+    //             bit: new_bit,
+    //         },
+    //         word,
+    //     )
+    // }
 
     pub fn eval_init(&self) -> EvalState {
         EvalState {
