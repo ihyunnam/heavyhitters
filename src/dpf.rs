@@ -281,9 +281,7 @@ where
         let mut state = self.eval_init();
 
         for i in 0..idx.len() {
-            if i != idx.len() - 1 {
-                states.push(state.clone());
-            }
+            states.push(state.clone());
             let bit = idx[i];
             let (state_new, word) = self.eval_bit(&state, bit);
             out.push(word);
