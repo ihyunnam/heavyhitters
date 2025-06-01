@@ -162,7 +162,7 @@ where
 {
 
     pub fn gen(alpha_bits: &[bool], values: &[T]) -> (DPFKey<T>, DPFKey<T>) {
-        debug_assert!(alpha_bits.len() == values.len() + 1);
+        debug_assert!(alpha_bits.len() == values.len());
 
         let root_seeds = (prg::PrgSeed::random(), prg::PrgSeed::random());
         let root_bits = (false, true);
