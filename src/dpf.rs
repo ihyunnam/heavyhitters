@@ -276,7 +276,7 @@ where
     pub fn eval(&self, idx: &[bool]) -> (Vec<T>, Vec<EvalState>) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
-        let mut states = Vec::with_capacity(255);
+        let mut states = Vec::with_capacity(256);
         let mut out = vec![];
         let mut state = self.eval_init();
 
