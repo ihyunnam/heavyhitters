@@ -19,8 +19,8 @@ fn dpf_complete() {
     for i in 0..(1 << nbits) {
         let alpha_eval = u32_to_bits(nbits, i);
 
-        let eval0 = key0.eval(&alpha_eval[0..3]);
-        let eval1 = key1.eval(&alpha_eval[0..3]);
+        let (eval0, _) = key0.eval(&alpha_eval[0..3]);
+        let (eval1, _) = key1.eval(&alpha_eval[0..3]);
         println!("Alpha: {:?}", alpha);
         for j in 0..((nbits-1) as usize) {
             if j < 2 {

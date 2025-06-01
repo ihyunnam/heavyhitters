@@ -23,11 +23,11 @@ pub trait Group {
     fn zero() -> Self;
     fn one() -> Self;
     fn negate(&mut self);
-    fn reduce(&mut self);
+    // fn reduce(&mut self);
     fn add(&mut self, other: &Self);
-    fn add_lazy(&mut self, other: &Self);
-    fn mul(&mut self, other: &Self);
-    fn mul_lazy(&mut self, other: &Self);
+    // fn add_lazy(&mut self, other: &Self);
+    // fn mul(&mut self, other: &Self);
+    // fn mul_lazy(&mut self, other: &Self);
     fn sub(&mut self, other: &Self);
 }
 

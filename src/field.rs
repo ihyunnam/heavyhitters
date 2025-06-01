@@ -1,4 +1,6 @@
 use ark_ff::{BigInteger};
+use num::Num;
+use std::convert::TryFrom;
 use std::ops::{SubAssign, AddAssign, MulAssign, Add, Sub, Neg, Div};
 use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use ark_ff::PrimeField;
@@ -16,10 +18,11 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::u32;
 use ark_bn254::Fr;
+use ark_ff::BigInt;
 
-#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldElm {
-    pub value: BigUint,
+    pub value: BigInt<4>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,7 +73,21 @@ lazy_static! {
 
 impl FieldElm {
     pub fn from_hex(inp: &[u8]) -> Option<FieldElm> {
-        BigUint::parse_bytes(inp, 16).map(|value| FieldElm { value })
+        // BigUint::parse_bytes(inp, 16).map(|value| FieldElm { value: BigInt::<4>::try_from(value.to_bytes_le()) })
+        let hex_str = std::str::from_utf8(inp).ok()?;
+        let bigint = BigUint::from_str_radix(hex_str, 16).ok()?;
+        let le_bytes = bigint.to_bytes_le(); // little-endian bytes
+
+        // Prepare limbs: zero-padded if necessary
+        let mut limbs = [0u64; 4];
+        for (i, chunk) in le_bytes.chunks(8).take(4).enumerate() {
+            let mut buf = [0u8; 8];
+            buf[..chunk.len()].copy_from_slice(chunk);
+            limbs[i] = u64::from_le_bytes(buf);
+        }
+
+        Some(FieldElm { value: BigInt::<4>(limbs) })
+        // Some(BigInt::<4>(limbs))
     }
 
     pub fn to_vec(&self, len: usize) -> Vec<FieldElm> {
@@ -119,26 +136,26 @@ impl crate::Group for Dummy {
 
     fn add(&mut self, other: &Self) {
         //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value += &other.value;
-        self.value %= &MODULUS.value;
+        // self.value += &other.value;
+        // self.value %= &MODULUS.value;
     }
 
-    fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
-        self.value %= &MODULUS.value;
-    }
+    // fn mul(&mut self, other: &Self) {
+    //     self.value *= &other.value;
+    //     self.value %= &MODULUS.value;
+    // }
 
-    fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
-    }
+    // fn add_lazy(&mut self, other: &Self) {
+    //     self.value += &other.value;
+    // }
 
-    fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
-    }
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     self.value *= &other.value;
+    // }
 
-    fn reduce(&mut self) {
-        self.value %= &MODULUS.value;
-    }
+    // fn reduce(&mut self) {
+    //     self.value %= &MODULUS.value;
+    // }
 
     fn sub(&mut self, other: &Self) {
         // XXX not constant time
@@ -181,31 +198,31 @@ impl crate::Group for u64 {
         *self %= MODULUS_64;
     }
 
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        debug_assert!(*self < MODULUS_64);
-        debug_assert!(*other < MODULUS_64);
-        let s64: u64 = *self;
-        let o64: u64 = *other;
-        let a: u128 = s64.into();
-        let b: u128 = o64.into();
+    // #[inline]
+    // fn mul(&mut self, other: &Self) {
+    //     debug_assert!(*self < MODULUS_64);
+    //     debug_assert!(*other < MODULUS_64);
+    //     let s64: u64 = *self;
+    //     let o64: u64 = *other;
+    //     let a: u128 = s64.into();
+    //     let b: u128 = o64.into();
 
-        let res = (a * b) % MODULUS_64_BIG;
-        *self = res.try_into().unwrap();
-    }
+    //     let res = (a * b) % MODULUS_64_BIG;
+    //     *self = res.try_into().unwrap();
+    // }
 
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.add(other);
-    }
+    // #[inline]
+    // fn add_lazy(&mut self, other: &Self) {
+    //     self.add(other);
+    // }
 
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.mul(other);
-    }
+    // #[inline]
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     self.mul(other);
+    // }
 
-    #[inline]
-    fn reduce(&mut self) {}
+    // #[inline]
+    // fn reduce(&mut self) {}
 
     #[inline]
     fn sub(&mut self, other: &Self) {
@@ -253,24 +270,24 @@ impl crate::Group for FE {
         *self = <FE as Add>::add(*self, *other);
     }
 
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        use std::ops::Mul;
-        *self = <FE as Mul>::mul(*self, *other);
-    }
+    // #[inline]
+    // fn mul(&mut self, other: &Self) {
+    //     use std::ops::Mul;
+    //     *self = <FE as Mul>::mul(*self, *other);
+    // }
 
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.add(other);
-    }
+    // #[inline]
+    // fn add_lazy(&mut self, other: &Self) {
+    //     self.add(other);
+    // }
 
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.mul(other);
-    }
+    // #[inline]
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     self.mul(other);
+    // }
 
-    #[inline]
-    fn reduce(&mut self) {}
+    // #[inline]
+    // fn reduce(&mut self) {}
 
     #[inline]
     fn sub(&mut self, other: &Self) {
@@ -320,14 +337,24 @@ impl From<u32> for FieldElm {
     #[inline]
     fn from(inp: u32) -> Self {
         FieldElm {
-            value: BigUint::from(inp),
+            value: BigInt::<4>::from(inp),
         }
     }
 }
 
-impl From<BigUint> for FieldElm {
+// impl From<u128> for FieldElm {
+//     #[inline]
+//     fn from(inp: u128) -> Self {
+//         FieldElm {
+//             value: BigInt::<4>::from(inp),
+//         }
+//     }
+// }
+
+
+impl From<BigInt<4>> for FieldElm {
     #[inline]
-    fn from(inp: BigUint) -> Self {
+    fn from(inp: BigInt<4>) -> Self {
         FieldElm { value: inp }
     }
 }
@@ -360,44 +387,49 @@ impl crate::Group for FieldElm {
     #[inline]
     fn add(&mut self, other: &Self) {
         //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
-        self.value += &other.value;
-        self.value %= &MODULUS.value;
+        // self.value += &other.value;
+        // self.value %= &MODULUS.value;
+        self.value.add_with_carry(&other.value);
     }
 
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        self.value *= &other.value;
-        self.value %= &MODULUS.value;
-    }
+    // #[inline]
+    // fn mul(&mut self, other: &Self) {
+    //     self.value *= &other.value;
+    //     self.value %= &MODULUS.value;
+    // }
 
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.value += &other.value;
-    }
+    // #[inline]
+    // fn add_lazy(&mut self, other: &Self) {
+    //     self.value += &other.value;
+    // }
 
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.value *= &other.value;
-    }
+    // #[inline]
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     self.value *= &other.value;
+    // }
 
-    #[inline]
-    fn reduce(&mut self) {
-        self.value %= &MODULUS.value;
-    }
+    // #[inline]
+    // fn reduce(&mut self) {
+    //     self.value %= &MODULUS.value;
+    // }
 
     #[inline]
     fn sub(&mut self, other: &Self) {
-        // XXX not constant time
-        if self.value < other.value {
-            self.value += &MODULUS.value;
-        }
+        // // XXX not constant time
+        // if self.value < other.value {
+        //     self.value += &MODULUS.value;
+        // }
 
-        *self = FieldElm::from(&self.value - &other.value);
+        // *self = FieldElm::from(&self.value - &other.value);
+        self.value.sub_with_borrow(&other.value);
     }
 
     #[inline]
     fn negate(&mut self) {
-        self.value = &MODULUS.value - &self.value;
+        // self.value = &MODULUS.value - &self.value;
+        let mut return_value = MODULUS.value;
+        &return_value.sub_with_borrow(&self.value);
+        self.value = return_value;
     }
 }
 
@@ -469,33 +501,33 @@ impl crate::Group for FieldElmBn254 {
         // self.value %= &MODULUS.value;
     }
 
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        // self.value = self.value.mul(&other.value);
-        self.value.mul_assign(&other.value);
-        // self.value %= &MODULUS.value;
-    }
+    // #[inline]
+    // fn mul(&mut self, other: &Self) {
+    //     // self.value = self.value.mul(&other.value);
+    //     self.value.mul_assign(&other.value);
+    //     // self.value %= &MODULUS.value;
+    // }
 
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        // self.value += &other.value;
-        self.value.add_assign(&other.value);
-    }
+    // #[inline]
+    // fn add_lazy(&mut self, other: &Self) {
+    //     // self.value += &other.value;
+    //     self.value.add_assign(&other.value);
+    // }
 
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        // self.value *= &other.value;
-        self.value.mul_assign(&other.value);
-    }
+    // #[inline]
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     // self.value *= &other.value;
+    //     self.value.mul_assign(&other.value);
+    // }
 
-    #[inline]
-    fn reduce(&mut self) {
-        println!("REDUCE1");
-        // println!("REDUCE");
-        // self.value %= &Fr::MODULUS;
-        // let value_bytes = self.value.into_bigint().to_bytes_be();
-        // self.value = Fr::from_be_bytes_mod_order(&value_bytes);
-    }
+    // #[inline]
+    // fn reduce(&mut self) {
+    //     println!("REDUCE1");
+    //     // println!("REDUCE");
+    //     // self.value %= &Fr::MODULUS;
+    //     // let value_bytes = self.value.into_bigint().to_bytes_be();
+    //     // self.value = Fr::from_be_bytes_mod_order(&value_bytes);
+    // }
 
     #[inline]
     fn sub(&mut self, other: &Self) {
@@ -551,30 +583,30 @@ where
         self.1.add(&other.1);
     }
 
-    #[inline]
-    fn mul(&mut self, other: &Self) {
-        self.0.mul(&other.0);
-        self.1.mul(&other.1);
-    }
+    // #[inline]
+    // fn mul(&mut self, other: &Self) {
+    //     self.0.mul(&other.0);
+    //     self.1.mul(&other.1);
+    // }
 
-    #[inline]
-    fn add_lazy(&mut self, other: &Self) {
-        self.0.add_lazy(&other.0);
-        self.1.add_lazy(&other.1);
-    }
+    // #[inline]
+    // fn add_lazy(&mut self, other: &Self) {
+    //     self.0.add_lazy(&other.0);
+    //     self.1.add_lazy(&other.1);
+    // }
 
-    #[inline]
-    fn mul_lazy(&mut self, other: &Self) {
-        self.0.mul_lazy(&other.0);
-        self.1.mul_lazy(&other.1);
-    }
+    // #[inline]
+    // fn mul_lazy(&mut self, other: &Self) {
+    //     self.0.mul_lazy(&other.0);
+    //     self.1.mul_lazy(&other.1);
+    // }
 
-    #[inline]
-    fn reduce(&mut self) {
-        // self.0.reduce();
-        // self.1.reduce();
-        println!("REDUCE2");
-    }
+    // #[inline]
+    // fn reduce(&mut self) {
+    //     // self.0.reduce();
+    //     // self.1.reduce();
+    //     println!("REDUCE2");
+    // }
 
     #[inline]
     fn negate(&mut self) {
@@ -615,9 +647,9 @@ mod tests {
 
     #[test]
     fn add() {
-        let mut res = FieldElmBn254::zero();    // PASSES
-        let one = FieldElmBn254::from(1u32);
-        let two = FieldElmBn254::from(2u32);
+        let mut res = FieldElm::zero();    // PASSES
+        let one = FieldElm::from(1u32);
+        let two = FieldElm::from(2u32);
         res.add(&one);
         res.add(&one);
         assert_eq!(two, res);
@@ -632,31 +664,31 @@ mod tests {
         assert_eq!(two, res);
     }
 
-    #[test]
-    fn mul_big() {
-        let mut res = FieldElm::zero();
-        let two = FieldElm::from(2);
-        res.add(&two);
-        res.mul(&MODULUS);
-        assert_eq!(res, FieldElm::zero());
-    }
+    // #[test]
+    // fn mul_big() {
+    //     let mut res = FieldElm::zero();
+    //     let two = FieldElm::from(2);
+    //     res.add(&two);
+    //     res.mul(&MODULUS);
+    //     assert_eq!(res, FieldElm::zero());
+    // }
 
-    #[test]
-    fn mul_big2() {
-        let mut res = FieldElmBn254::zero();
-        let two = FieldElmBn254::from(2u32);
-        let eight = FieldElmBn254::from(8u32);
-        res.add(&two);
-        res.mul(&eight);
-        assert_eq!(res, FieldElmBn254::from(16u32));
-    }
+    // #[test]
+    // fn mul_big2() {
+    //     let mut res = FieldElm::zero();
+    //     let two = FieldElm::from(2u32);
+    //     let eight = FieldElm::from(8u32);
+    //     res.add(&two);
+    //     res.mul(&eight);
+    //     assert_eq!(res, FieldElm::from(16u32));
+    // }
 
     #[test]
     fn negate() {
-        let zero = FieldElmBn254::zero();   // PASSES
-        let x = FieldElmBn254::from(1123123u128);
-        let mut negx = FieldElmBn254::from(1123123u128);
-        let mut res = FieldElmBn254::zero();
+        let zero = FieldElm::zero();   // PASSES
+        let x = FieldElm::from(1123123u32);
+        let mut negx = FieldElm::from(1123123u32);
+        let mut res = FieldElm::zero();
 
         negx.negate();
         res.add(&x);
@@ -666,22 +698,22 @@ mod tests {
 
     #[test]
     fn rand() {
-        let zero = FieldElmBn254::zero();   // PASSES
-        let nonzero = FieldElmBn254::random();
+        let zero = FieldElm::zero();   // PASSES
+        let nonzero = FieldElm::random();
         assert!(zero != nonzero);
     }
 
     #[test]
     fn sub() {
-        let zero = FieldElmBn254::zero();   // PASSES
-        let mut x = FieldElmBn254::from(1123123u32);
+        let zero = FieldElm::zero();   // PASSES
+        let mut x = FieldElm::from(1123123u32);
         let xp = x.clone();
         x.sub(&xp);
         assert_eq!(x, zero);
 
-        let mut y = FieldElmBn254::from(7u32);
-        y.sub(&FieldElmBn254::from(3u32));
-        let exp2 = FieldElmBn254::from(4u32);
+        let mut y = FieldElm::from(7u32);
+        y.sub(&FieldElm::from(3u32));
+        let exp2 = FieldElm::from(4u32);
         assert_eq!(y, exp2);
     }
 
@@ -704,24 +736,24 @@ mod tests {
         assert_eq!(two, res);
     }
 
-    #[test]
-    fn mul_big128() {
-        let mut res = 0u64;
-        let four = 4u64;
-        res.add(&four);
-        res.mul(&(MODULUS_64 - 1));
-        assert_eq!(res, MODULUS_64 - 4);
-    }
+    // #[test]
+    // fn mul_big128() {
+    //     let mut res = 0u64;
+    //     let four = 4u64;
+    //     res.add(&four);
+    //     res.mul(&(MODULUS_64 - 1));
+    //     assert_eq!(res, MODULUS_64 - 4);
+    // }
 
-    #[test]
-    fn mul_big2128() {
-        let mut res = u64::zero();
-        let two = 2u64;
-        let eight = 8u64;
-        res.add(&two);
-        res.mul(&eight);
-        assert_eq!(res, 16u64);
-    }
+    // #[test]
+    // fn mul_big2128() {
+    //     let mut res = u64::zero();
+    //     let two = 2u64;
+    //     let eight = 8u64;
+    //     res.add(&two);
+    //     res.mul(&eight);
+    //     assert_eq!(res, 16u64);
+    // }
 
     #[test]
     fn negate128() {
