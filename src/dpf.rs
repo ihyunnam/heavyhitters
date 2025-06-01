@@ -281,13 +281,13 @@ where
         let mut state = self.eval_init();
 
         for i in 0..idx.len() {
+            if i != idx.len() - 1 {
+                states.push(state.clone());
+            }
             let bit = idx[i];
             let (state_new, word) = self.eval_bit(&state, bit);
             out.push(word);
-            state = state_new.clone();
-            if i != idx.len() - 1 {
-                states.push(state_new);
-            }
+            state = state_new
         }
         // let (_, last) = self.eval_bit_last(&state, *idx.last().unwrap());
 
