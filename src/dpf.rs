@@ -273,9 +273,10 @@ where
         }
     }
 
-    pub fn eval(&self, idx: &[bool]) -> Vec<T> {
+    pub fn eval(&self, idx: &[bool]) -> (Vec<T>, Vec<EvalState>) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
+        let mut states = Vec::with_capacity(255);
         let mut out = vec![];
         let mut state = self.eval_init();
 
@@ -283,12 +284,15 @@ where
             let bit = idx[i];
             let (state_new, word) = self.eval_bit(&state, bit);
             out.push(word);
-            state = state_new;
+            state = state_new.clone();
+            if i != idx.len() - 1 {
+                states.push(state_new);
+            }
         }
         // let (_, last) = self.eval_bit_last(&state, *idx.last().unwrap());
 
         // (out, last)
-        out
+        (out, states)
     }
 
     pub fn gen_from_str(s: &str) -> (Self, Self) {
