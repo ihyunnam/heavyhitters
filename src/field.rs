@@ -17,13 +17,47 @@ use std::convert::TryInto;
 use std::u32;
 use ark_bn254::Fr;
 
+/* F2 binary field */
+#[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
+pub struct F2 {
+    pub value: bool,
+}
+
+impl crate::Group for F2 {
+    #[inline] fn zero() -> Self { F2 {value: false} }
+    #[inline] fn one()  -> Self { F2 {value: true} }
+
+    // 𝔽₂: + is XOR
+    #[inline] fn add(&mut self, other: &Self)      { self.value ^= other.value; }
+    // 𝔽₂: * is AND
+    #[inline] fn mul(&mut self, other: &Self)      { self.value &= other.value; }
+
+    // “lazy” = same as regular in 𝔽₂
+    #[inline] fn add_lazy(&mut self, other: &Self) { self.value ^= other.value; }
+    #[inline] fn mul_lazy(&mut self, other: &Self) { self.value &= other.value; }
+
+    // no modulus to reduce in 𝔽₂
+    #[inline] fn reduce(&mut self) {}
+
+    // 𝔽₂: subtraction == addition; negation is identity
+    #[inline] fn sub(&mut self, other: &Self)      { self.value ^= other.value; }
+    #[inline] fn negate(&mut self)                 { /* no-op */ }
+}
+
+impl crate::prg::FromRng for F2 {
+    #[inline]
+    fn from_rng(&mut self, rng: &mut impl rand::Rng) {
+        self.value = (rng.next_u32() & 1) != 0;
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, SerializeSerde, DeserializeSerde)]
 pub struct FieldElm {
     pub value: BigUint,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FieldElmBn254 {
+pub struct FieldElmBn254 {  // TODO REMOVE BN254?
     pub value: Fr,
 }
 
@@ -359,7 +393,6 @@ impl crate::Group for FieldElm {
 
     #[inline]
     fn add(&mut self, other: &Self) {
-        //*self = FieldElm::from((&self.value + &other.value) % &MODULUS.value);
         self.value += &other.value;
         self.value %= &MODULUS.value;
     }

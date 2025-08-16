@@ -13,6 +13,7 @@ pub mod prg;
 #[macro_use]
 extern crate lazy_static;
 
+pub use crate::field::F2;
 pub use crate::field::Dummy;
 pub use crate::field::FieldElm;
 pub use crate::field::FieldElmBn254;

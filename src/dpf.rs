@@ -233,38 +233,6 @@ where
         )
     }
 
-    // pub fn eval_bit_last(&self, state: &EvalState, dir: bool) -> (EvalState, U) {
-    //     let tau = state.seed.expand_dir(!dir, dir);
-    //     let mut seed = tau.seeds.get(dir).clone();
-    //     let mut new_bit = *tau.bits.get(dir);
-
-    //     if state.bit {
-    //         seed = &seed ^ &self.cor_word_last.seed;
-    //         new_bit ^= self.cor_word_last.bits.get(dir);
-    //     }
-
-    //     let converted = seed.convert::<U>();
-    //     seed = converted.seed;
-
-    //     let mut word = converted.word;
-    //     if new_bit {
-    //         word.add(&self.cor_word_last.word);
-    //     }
-
-    //     if self.key_idx {
-    //         word.negate()
-    //     }
-
-    //     (
-    //         EvalState {
-    //             level: state.level + 1,
-    //             seed,
-    //             bit: new_bit,
-    //         },
-    //         word,
-    //     )
-    // }
-
     pub fn eval_init(&self) -> EvalState {
         EvalState {
             level: 0,
