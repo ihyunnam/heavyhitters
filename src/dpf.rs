@@ -45,9 +45,9 @@ pub struct DPFKey<T> {
 
 #[derive(Clone)]
 pub struct EvalState {
-    level: usize,
-    seed: prg::PrgSeed,
-    bit: bool,
+    pub level: usize,
+    pub seed: prg::PrgSeed,
+    pub bit: bool,
 }
 
 trait TupleMapToExt<T, U> {
