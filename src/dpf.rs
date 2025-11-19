@@ -199,6 +199,38 @@ where
         )
     }
 
+    pub fn eval_bit_in_place(&self, state: &mut EvalState, dir: bool) -> T {
+        let tau = state.seed.expand_dir(!dir, dir);
+        let mut seed = tau.seeds.get(dir).clone();
+        let mut new_bit = *tau.bits.get(dir);
+    
+        // Correction words
+        if state.bit {
+            seed = &seed ^ &self.cor_words[state.level].seed;
+            new_bit ^= self.cor_words[state.level].bits.get(dir);
+        }
+    
+        // Convert seed (PRG output) into (next_seed, word)
+        let converted = seed.convert::<T>();
+        seed = converted.seed;
+    
+        let mut word = converted.word;
+        if new_bit {
+            word.add(&self.cor_words[state.level].word);
+        }
+    
+        if self.key_idx {
+            word.negate()
+        }
+    
+        state.level += 1;
+        state.seed = seed;
+        state.bit = new_bit;
+    
+        // Return only the word
+        word
+    }
+    
     pub fn eval_bit(&self, state: &EvalState, dir: bool) -> (EvalState, T) {
         let tau = state.seed.expand_dir(!dir, dir);
         let mut seed = tau.seeds.get(dir).clone();
