@@ -293,6 +293,28 @@ where
         (out, states)
     }
 
+    pub fn eval_result_only(&self, idx: &[bool]) -> T {
+        debug_assert!(idx.len() <= self.domain_size());
+        debug_assert!(!idx.is_empty());
+        // let mut states = Vec::with_capacity(256);
+        // let mut out = vec![];
+        let mut state = self.eval_init();
+
+        for i in 0..idx.len()-1 {
+            // states.push(state.clone());
+            let bit = idx[i];
+            let (state_new, _) = self.eval_bit(&state, bit);
+            // out.push(word);
+            state = state_new
+        }
+        let (_, word) = self.eval_bit(&state, idx[idx.len()-1]);
+        // let (_, last) = self.eval_bit_last(&state, *idx.last().unwrap());
+
+        // (out, last)
+        // (out, states)
+        word
+    }
+
     pub fn gen_from_str(s: &str) -> (Self, Self) {
         let bits = crate::string_to_bits(s);
         let values = vec![T::one(); bits.len()-1];
