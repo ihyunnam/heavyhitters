@@ -293,7 +293,7 @@ where
         (out, states)
     }
 
-    pub fn eval_result_only(&self, idx: &[bool]) -> T {
+    pub fn eval_result_only(&self, idx: &[bool]) -> (T, EvalState) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
         // let mut states = Vec::with_capacity(256);
@@ -312,7 +312,7 @@ where
 
         // (out, last)
         // (out, states)
-        word
+        (word, state)
     }
 
     pub fn gen_from_str(s: &str) -> (Self, Self) {
