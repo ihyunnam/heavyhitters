@@ -293,7 +293,7 @@ where
         (out, states)
     }
 
-    pub fn eval_result_only(&self, idx: &[bool]) -> (T, EvalState) {
+    pub fn eval_result_only(&self, idx: Vec<bool>) -> (T, EvalState) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
         // let mut states = Vec::with_capacity(256);
