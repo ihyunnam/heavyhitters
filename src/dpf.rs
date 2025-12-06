@@ -291,42 +291,6 @@ where
         (out, states)
     }
 
-    #[inline(always)]
-    pub fn eval_three_keys(
-        key0: &DPFKey<T>,
-        key1: &DPFKey<T>,
-        key2: &DPFKey<T>,
-        bits: Vec<bool>,
-    ) -> (T, T, T)
-    {
-        debug_assert!(bits.len() <= key0.domain_size());
-        debug_assert!(!bits.is_empty());
-        let last = bits.len() - 1 ;
-
-        let mut s0 = key0.eval_init();
-        let mut s1 = key1.eval_init();
-        let mut s2 = key2.eval_init();
-
-        // Fusing the per-level descent for all 3 keys
-        for level in 0..last{
-            let bit = bits[level];
-            let (s0_new, _) = key0.eval_bit(&s0, bit);
-            s0 = s0_new;
-            let (s1_new, _) = key1.eval_bit(&s1, bit);
-            s1 = s1_new;
-            let (s2_new, _) = key2.eval_bit(&s2, bit);
-            s2 = s2_new;
-        }
-
-        // ---- Last step: extract final outputs ----
-        let last_bit = bits[last];
-        let (_, w0) = key0.eval_bit(&s0, last_bit);
-        let (_, w1) = key1.eval_bit(&s1, last_bit);
-        let (_, w2) = key2.eval_bit(&s2, last_bit);
-        
-        (w0, w1, w2)
-    }
-
     pub fn eval_result_only(&self, idx: Vec<bool>) -> (T, EvalState) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
@@ -353,4 +317,41 @@ where
     pub fn domain_size(&self) -> usize {
         self.cor_words.len()
     }
+}
+
+
+#[inline(always)]
+pub fn eval_three_keys(
+    key0: &DPFKey<T>,
+    key1: &DPFKey<T>,
+    key2: &DPFKey<T>,
+    bits: Vec<bool>,
+) -> (T, T, T)
+{
+    debug_assert!(bits.len() <= key0.domain_size());
+    debug_assert!(!bits.is_empty());
+    let last = bits.len() - 1 ;
+
+    let mut s0 = key0.eval_init();
+    let mut s1 = key1.eval_init();
+    let mut s2 = key2.eval_init();
+
+    // Fusing the per-level descent for all 3 keys
+    for level in 0..last{
+        let bit = bits[level];
+        let (s0_new, _) = key0.eval_bit(&s0, bit);
+        s0 = s0_new;
+        let (s1_new, _) = key1.eval_bit(&s1, bit);
+        s1 = s1_new;
+        let (s2_new, _) = key2.eval_bit(&s2, bit);
+        s2 = s2_new;
+    }
+
+    // ---- Last step: extract final outputs ----
+    let last_bit = bits[last];
+    let (_, w0) = key0.eval_bit(&s0, last_bit);
+    let (_, w1) = key1.eval_bit(&s1, last_bit);
+    let (_, w2) = key2.eval_bit(&s2, last_bit);
+    
+    (w0, w1, w2)
 }
