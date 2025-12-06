@@ -321,12 +321,14 @@ where
 
 
 #[inline(always)]
-pub fn eval_three_keys(
+pub fn eval_three_keys<T>(
     key0: &DPFKey<T>,
     key1: &DPFKey<T>,
     key2: &DPFKey<T>,
     bits: Vec<bool>,
 ) -> (T, T, T)
+where
+    T: prg::FromRng + Clone + Group + std::fmt::Debug,
 {
     debug_assert!(bits.len() <= key0.domain_size());
     debug_assert!(!bits.is_empty());
