@@ -230,7 +230,7 @@ where
         // Return only the word
         word
     }
-    
+
     pub fn eval_bit(&self, state: &EvalState, dir: bool) -> (EvalState, T) {
         let tau = state.seed.expand_dir(!dir, dir);
         let mut seed = tau.seeds.get(dir).clone();
@@ -252,8 +252,6 @@ where
         if self.key_idx {
             word.negate()
         }
-
-        //println!("server: {:?}, tl = {:?}, Wl = {:?}", self.key_idx, new_bit, word);
 
         (
             EvalState {
@@ -293,25 +291,56 @@ where
         (out, states)
     }
 
+    #[inline(always)]
+    pub fn eval_three_keys(
+        key0: &DPFKey<T>,
+        key1: &DPFKey<T>,
+        key2: &DPFKey<T>,
+        bits: Vec<bool>,
+    ) -> (T, T, T)
+    {
+        debug_assert!(bits.len() <= key0.domain_size());
+        debug_assert!(!bits.is_empty());
+        let last = bits.len() - 1 ;
+
+        let mut s0 = key0.eval_init();
+        let mut s1 = key1.eval_init();
+        let mut s2 = key2.eval_init();
+
+        // Fusing the per-level descent for all 3 keys
+        for level in 0..last{
+            let bit = bits[level];
+            let (s0_new, _) = key0.eval_bit(&s0, bit);
+            s0 = s0_new;
+            let (s1_new, _) = key1.eval_bit(&s1, bit);
+            s1 = s1_new;
+            let (s2_new, _) = key2.eval_bit(&s2, bit);
+            s2 = s2_new;
+        }
+
+        // ---- Last step: extract final outputs ----
+        let last_bit = bits[last];
+        let (_, w0) = key0.eval_bit(&s0, last_bit);
+        let (_, w1) = key1.eval_bit(&s1, last_bit);
+        let (_, w2) = key2.eval_bit(&s2, last_bit);
+        
+        (w0, w1, w2)
+    }
+
     pub fn eval_result_only(&self, idx: Vec<bool>) -> (T, EvalState) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
-        // let mut states = Vec::with_capacity(256);
-        // let mut out = vec![];
-        let mut state = self.eval_init();
+
+        let mut state: EvalState = self.eval_init();
 
         for i in 0..idx.len()-1 {
-            // states.push(state.clone());
             let bit = idx[i];
             let (state_new, _) = self.eval_bit(&state, bit);
-            // out.push(word);
+
             state = state_new
         }
         let (_, word) = self.eval_bit(&state, idx[idx.len()-1]);
-        // let (_, last) = self.eval_bit_last(&state, *idx.last().unwrap());
-
-        // (out, last)
-        // (out, states)
+        
         (word, state)
     }
 

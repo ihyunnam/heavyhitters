@@ -6,13 +6,13 @@ fn dpf_complete() {
     let nbits = 7;
     let alpha = u32_to_bits(nbits, 17);
     let betas = vec![
-        FieldElm::from(7u32),
-        FieldElm::from(17u32),
-        FieldElm::from(2u32),
-        FieldElm::from(0u32),
-        FieldElm::from(1u32),
-        FieldElm::from(3u32),
-        FieldElm::from(4u32),
+        F2::from(7u32),
+        F2::from(17u32),
+        F2::from(2u32),
+        F2::from(0u32),
+        F2::from(1u32),
+        F2::from(3u32),
+        F2::from(4u32),
     ];
     let (key0, key1) = DPFKey::gen(&alpha, &betas);
 
@@ -29,7 +29,7 @@ fn dpf_complete() {
 
             // let eval0 = key0.eval(&alpha_eval[0..j].to_vec());
             // let eval1 = key1.eval(&alpha_eval[0..j].to_vec());
-            let mut tmp = FieldElm::zero();
+            let mut tmp = F2::zero();
 
             tmp.add(&eval0[j - 2]);
             tmp.add(&eval1[j - 2]);
@@ -43,7 +43,7 @@ fn dpf_complete() {
                     alpha_eval
                 );
             } else {
-                assert_eq!(FieldElm::zero(), tmp);
+                assert_eq!(F2::zero(), tmp);
             }
         }
     }
