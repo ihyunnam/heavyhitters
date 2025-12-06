@@ -1,5 +1,6 @@
 use crate::prg;
 use crate::Group;
+use crate::field::F2;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -319,16 +320,15 @@ where
     }
 }
 
-
 #[inline(always)]
-pub fn eval_three_keys<T>(
-    key0: &DPFKey<T>,
-    key1: &DPFKey<T>,
-    key2: &DPFKey<T>,
+pub fn eval_three_keys(
+    key0: &DPFKey<F2>,
+    key1: &DPFKey<F2>,
+    key2: &DPFKey<F2>,
     bits: Vec<bool>,
-) -> (T, T, T)
-where
-    T: prg::FromRng + Clone + Group + std::fmt::Debug,
+) -> (bool, bool, bool)
+// where
+//     F2: prg::FromRng + Clone + Group + std::fmt::Debug,
 {
     debug_assert!(bits.len() <= key0.domain_size());
     debug_assert!(!bits.is_empty());
@@ -355,5 +355,5 @@ where
     let (_, w1) = key1.eval_bit(&s1, last_bit);
     let (_, w2) = key2.eval_bit(&s2, last_bit);
     
-    (w0, w1, w2)
+    (w0.value, w1.value, w2.value)
 }
