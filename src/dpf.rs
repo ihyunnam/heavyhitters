@@ -325,7 +325,7 @@ pub fn eval_three_keys(
     key0: &DPFKey<F2>,
     key1: &DPFKey<F2>,
     key2: &DPFKey<F2>,
-    bits: Vec<bool>,
+    bits: &Vec<bool>,
 ) -> (bool, bool, bool)
 // where
 //     F2: prg::FromRng + Clone + Group + std::fmt::Debug,
