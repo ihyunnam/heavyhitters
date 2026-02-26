@@ -1,15 +1,11 @@
 use aes::cipher::{NewStreamCipher, SyncStreamCipher};
 
-use core::arch::x86_64::{
-    __m128i, _mm_add_epi64, _mm_loadu_si128, _mm_set_epi64x, _mm_storeu_si128,
-};
-
 // use aes::block_cipher::{generic_array::GenericArray, Block, BlockCipher, NewBlockCipher};
 use aes::{Aes128, BlockCipher, NewBlockCipher};
 // use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 // use aes::cipher::NewStreamCipher;
 use aes_ctr::Aes128Ctr;
-use aes::cipher::{block::Block, generic_array::GenericArray};
+use aes::cipher::generic_array::GenericArray;
 
 use rand::Rng;
 use rand_core::RngCore;
@@ -28,7 +24,7 @@ pub const AES_BLOCK_SIZE: usize = 16;
 // XXX Todo try using 8-way parallelism
 pub struct FixedKeyPrgStream {
     aes: Aes128,
-    ctr: __m128i,
+    ctr: [u64; 2], // [low_word, high_word], same layout as __m128i stored via _mm_storeu_si128
     buf: [u8; AES_BLOCK_SIZE * 8],
     have: usize,
     buf_ptr: usize,
@@ -278,32 +274,29 @@ impl FixedKeyPrgStream {
         //println!("Blocks: {:?}", self.buf[2]);
     }
 
-    // From RustCrypto aesni crate
+    // Portable replacement for _mm_add_epi64(v, _mm_set_epi64x(1, 0)):
+    // increments the high 64-bit word independently (no carry from/to low word).
     #[inline(always)]
-    fn inc_be(v: __m128i) -> __m128i {
-        unsafe { _mm_add_epi64(v, _mm_set_epi64x(1, 0)) }
+    fn inc_be(v: [u64; 2]) -> [u64; 2] {
+        [v[0], v[1].wrapping_add(1)]
     }
 
+    // Portable replacement for _mm_storeu_si128: store as little-endian words.
     #[inline(always)]
-    fn store(val: __m128i, at: &mut [u8]) {
+    fn store(val: [u64; 2], at: &mut [u8]) {
         debug_assert_eq!(at.len(), AES_BLOCK_SIZE);
-
-        #[allow(clippy::cast_ptr_alignment)]
-        unsafe {
-            _mm_storeu_si128(at.as_mut_ptr() as *mut __m128i, val)
-        }
+        at[0..8].copy_from_slice(&val[0].to_le_bytes());
+        at[8..16].copy_from_slice(&val[1].to_le_bytes());
     }
 
-    // Modified from RustCrypto aesni crate
+    // Portable replacement for _mm_loadu_si128: load as little-endian words.
     #[inline(always)]
-    fn load(key: &[u8; 16]) -> __m128i {
-        let val = Block::<Aes128>::from_slice(key);
-
-        // Safety: `loadu` supports unaligned loads
-        #[allow(clippy::cast_ptr_alignment)]
-        unsafe {
-            _mm_loadu_si128(val.as_ptr() as *const __m128i)
-        }
+    fn load(key: &[u8; 16]) -> [u64; 2] {
+        let mut low = [0u8; 8];
+        let mut high = [0u8; 8];
+        low.copy_from_slice(&key[0..8]);
+        high.copy_from_slice(&key[8..16]);
+        [u64::from_le_bytes(low), u64::from_le_bytes(high)]
     }
 }
 
