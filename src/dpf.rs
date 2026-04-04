@@ -209,7 +209,7 @@ where
             // if is_last_word {
                 // last_cor_word.push(gen_cor_word::<U>(bit, value_last.clone(), &mut bits, &mut seeds));
             // } else {
-                let cw = gen_cor_word::<T>(bit, values[i].clone(), &mut bits, &mut seeds);
+                let cw = gen_cor_word::<T>(bit, Some(values[i].clone()), &mut bits, &mut seeds);
                 cor_words.push(cw);
             // }
         }
