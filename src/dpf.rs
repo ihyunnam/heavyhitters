@@ -103,7 +103,7 @@ impl<T> TupleExt<T> for (T, T) {
     }
 }
 
-fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (prg::PrgSeed, prg::PrgSeed)) -> CorWord<W>
+fn gen_cor_word<W>(bit: bool, value: Option<W>, bits: &mut (bool, bool), seeds: &mut (prg::PrgSeed, prg::PrgSeed)) -> CorWord<W>
     where W: prg::FromRng + Clone + Group + std::fmt::Debug
 {
     let data = seeds.map(|s| s.expand());
@@ -139,18 +139,17 @@ fn gen_cor_word<W>(bit: bool, value: W, bits: &mut (bool, bool), seeds: &mut (pr
         *bits.get_mut(b) = newbit;
     }
 
-    let converted = seeds.map(|s| s.convert());
-    cw.word = value;
-    cw.word.sub(&converted.0.word);
-    cw.word.add(&converted.1.word);
-
-    if bits.1 {
-        cw.word.negate();
+    if let Some(value) = value {
+        let converted = seeds.map(|s| s.convert());
+        cw.word = value;
+        cw.word.sub(&converted.0.word);
+        cw.word.add(&converted.1.word);
+        if bits.1 {
+            cw.word.negate();
+        }
+        seeds.0 = converted.0.seed;
+        seeds.1 = converted.1.seed;
     }
-
-    seeds.0 = converted.0.seed;
-    seeds.1 = converted.1.seed;
-
     cw
 }
 
@@ -161,7 +160,38 @@ where
     T: prg::FromRng + Clone + Group + std::fmt::Debug,
     // U: prg::FromRng + Clone + Group + std::fmt::Debug
 {
-
+    pub fn gen_non_incr(alpha_bits: &[bool], value: &T) -> (DPFKey<T>, DPFKey<T>) {
+        let root_seeds = (prg::PrgSeed::random(), prg::PrgSeed::random());
+        let root_bits = (false, true);
+        
+        let mut seeds = root_seeds.clone();
+        let mut bits = root_bits;
+        let mut cor_words: Vec<CorWord<T>> = Vec::new();
+    
+        for (i, &bit) in alpha_bits.iter().enumerate() {
+            let is_last = i == alpha_bits.len() - 1;
+            let cw = if is_last {
+                gen_cor_word(bit, Some(value.clone()), &mut bits, &mut seeds)
+            } else {
+                gen_cor_word(bit, None, &mut bits, &mut seeds)
+            };
+            cor_words.push(cw);
+        }
+    
+        (
+            DPFKey::<T> {
+                key_idx: false,
+                root_seed: root_seeds.0,
+                cor_words: cor_words.clone(),
+            },
+            DPFKey::<T> {
+                key_idx: true,
+                root_seed: root_seeds.1,
+                cor_words,
+            },
+        )
+    }
+    
     pub fn gen(alpha_bits: &[bool], values: &[T]) -> (DPFKey<T>, DPFKey<T>) {
         debug_assert!(alpha_bits.len() == values.len());
 
@@ -272,6 +302,34 @@ where
         }
     }
 
+    fn eval_bit_seed_only(&self, state: &EvalState, cur_bit: bool) -> EvalState {
+        let tau = state.seed.expand_dir(!cur_bit, cur_bit);
+        let mut seed = tau.seeds.get(cur_bit).clone();
+        let mut new_bit = *tau.bits.get(cur_bit);
+        if state.bit {
+            seed = &seed ^ &self.cor_words[state.level].seed;
+            new_bit ^= self.cor_words[state.level].bits.get(cur_bit);
+        }
+        EvalState {
+            level: state.level + 1,
+            seed,
+            bit: new_bit,
+        }
+    }
+
+    pub fn eval_non_incr(&self, idx: &[bool]) -> T {
+        debug_assert!(idx.len() == self.domain_size());
+        debug_assert!(!idx.is_empty());
+        let mut state = self.eval_init();
+    
+        for i in 0..idx.len() - 1 {
+            state = self.eval_bit_seed_only(&state, idx[i]);
+        }
+    
+        let (_, word) = self.eval_bit(&state, *idx.last().unwrap());
+        word
+    }
+    
     pub fn eval(&self, idx: &[bool]) -> (Vec<T>, Vec<EvalState>) {
         debug_assert!(idx.len() <= self.domain_size());
         debug_assert!(!idx.is_empty());
