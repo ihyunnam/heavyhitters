@@ -230,6 +230,38 @@ where
         )
     }
 
+    
+    pub fn eval_full_domain(&self) -> Vec<T> {
+        let depth = self.domain_size();
+        
+        // Layer-by-layer expansion
+        // Each entry: EvalState at that node
+        let mut current_layer: Vec<EvalState> = vec![self.eval_init()];
+        
+        for level in 0..depth - 1 {
+            let mut next_layer = Vec::with_capacity(current_layer.len() * 2);
+            for state in &current_layer {
+                // expand both children, discard intermediate words
+                let left = self.eval_bit_seed_only(state, false);
+                let right = self.eval_bit_seed_only(state, true);
+                next_layer.push(left);
+                next_layer.push(right);
+            }
+            current_layer = next_layer;
+        }
+        
+        // Final level: extract words
+        let mut result = Vec::with_capacity(current_layer.len() * 2);
+        for state in &current_layer {
+            let (_, word_left) = self.eval_bit(state, false);
+            let (_, word_right) = self.eval_bit(state, true);
+            result.push(word_left);
+            result.push(word_right);
+        }
+        
+        result
+    }
+    
     pub fn eval_bit_in_place(&self, state: &mut EvalState, dir: bool) -> T {
         let tau = state.seed.expand_dir(!dir, dir);
         let mut seed = tau.seeds.get(dir).clone();
