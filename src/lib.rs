@@ -5,10 +5,10 @@ pub mod config;
 pub mod dpf;
 pub mod fastfield;
 mod field;
-pub mod mpc;
+// pub mod mpc;
 pub mod prg;
-pub mod rpc;
-pub mod sketch;
+// pub mod rpc;
+// pub mod sketch;
 
 #[macro_use]
 extern crate lazy_static;
