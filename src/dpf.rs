@@ -231,36 +231,39 @@ where
     }
 
     
+    
     pub fn eval_full_domain(&self) -> Vec<T> {
         let depth = self.domain_size();
-        
-        // Layer-by-layer expansion
-        // Each entry: EvalState at that node
         let mut current_layer: Vec<EvalState> = vec![self.eval_init()];
-        
-        for level in 0..depth - 1 {
-            let mut next_layer = Vec::with_capacity(current_layer.len() * 2);
+  
+        for _level in 0..depth - 1 {
+            let n = current_layer.len();
+            let mut next_layer = Vec::with_capacity(n * 2);
+            // All bit=false children first, then all bit=true children.
+            // This makes the bit applied at this level go into bit `level` of
+            // the result index, so eval_full_domain()[i] matches eval_non_incr
+            // at u32_to_bits(depth, i) (LSB-first, same as gen_non_incr).
             for state in &current_layer {
-                // expand both children, discard intermediate words
-                let left = self.eval_bit_seed_only(state, false);
-                let right = self.eval_bit_seed_only(state, true);
-                next_layer.push(left);
-                next_layer.push(right);
+                next_layer.push(self.eval_bit_seed_only(state, false));
+            }
+            for state in &current_layer {
+                next_layer.push(self.eval_bit_seed_only(state, true));
             }
             current_layer = next_layer;
         }
-        
-        // Final level: extract words
+  
         let mut result = Vec::with_capacity(current_layer.len() * 2);
         for state in &current_layer {
-            let (_, word_left) = self.eval_bit(state, false);
-            let (_, word_right) = self.eval_bit(state, true);
-            result.push(word_left);
-            result.push(word_right);
+            let (_, word) = self.eval_bit(state, false);
+            result.push(word);
         }
-        
+        for state in &current_layer {
+            let (_, word) = self.eval_bit(state, true);
+            result.push(word);
+        }
         result
     }
+  
     
     pub fn eval_bit_in_place(&self, state: &mut EvalState, dir: bool) -> T {
         let tau = state.seed.expand_dir(!dir, dir);
