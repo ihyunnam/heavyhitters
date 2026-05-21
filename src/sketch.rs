@@ -5,22 +5,25 @@ use serde::{Deserialize, Serialize};
 
 pub const TRIPLES_PER_LEVEL: usize = 3;
 
-/// All-prefix DPF supporting protection against additive attacks.
+/// Malicious-secure DPF (Section 4.2 of "Lightweight Techniques for Private Heavy Hitters", Boneh et al.).
 ///
-/// If the key represents a vector x \in F^n, we encode the key
-/// as a vector (a, a^2, x, a.x + a^2), for a random a \in \F.
+/// Encodes the client's weight-one vector v̄ as (v̄, κ·v̄) for a random κ ∈ F.
+/// The two servers can then run a constant-round sketching protocol to check that
+/// the client-provided shares represent a vector of weight at most 1, without learning
+/// the position or value of the non-zero entry.
 ///
-/// TODO Explain how servers validate the sketch.
+/// Single-type variant (Option B): same field T used uniformly at every level of the
+/// incremental DPF tree, including the leaves. This sacrifices the §4.3 extractability
+/// guarantee (which uses a wider field at the leaves) but is sufficient for use cases
+/// where the leaf semantic is "did this client cast its single vote" rather than "is
+/// this leaf a member of some sparse set S".
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SketchDPFKey<T, U> {
+pub struct SketchDPFKey<T> {
     pub mac_key: T,
     pub mac_key2: T,
-    pub mac_key_last: U,
-    pub mac_key2_last: U,
-    key: dpf::DPFKey<(T, T), (U, U)>,
+    key: dpf::DPFKey<(T, T)>,
 
     pub triples: Vec<mpc::TripleShare<T>>,
-    pub triples_last: Vec<mpc::TripleShare<U>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -28,8 +31,7 @@ pub struct SketchOutput<T> {
     // Compute
     //          <r, x>
     //          <r^2, x>
-    //          <r, k.x> + k^2
-    //          <r^2, k.x> + k^2
+    //          <r, k.x>
     pub r_x: T,
     pub r2_x: T,
     pub r_kx: T,
@@ -71,15 +73,15 @@ where
     }
 }
 
-impl<T,U> SketchDPFKey<T,U>
+impl<T> SketchDPFKey<T>
 where
     T: crate::Share + std::fmt::Debug + std::cmp::PartialEq,
-    U: crate::Share + std::fmt::Debug + std::cmp::PartialEq,
 {
     #[allow(clippy::needless_range_loop)]
-    pub fn gen(alpha_bits: &[bool], values_in: &[T], value_last: &U) -> [SketchDPFKey<T,U>; 2] {
-        // For MAC key a, encode data as
-        //      (a, a^2, x, a.x).
+    pub fn gen(alpha_bits: &[bool], values_in: &[T]) -> [SketchDPFKey<T>; 2] {
+        debug_assert!(alpha_bits.len() == values_in.len());
+
+        // For MAC key a, encode each level's value x as the pair (x, a·x).
         let mac_key = T::random();
         let (mac_key_sh0, mac_key_sh1) = mac_key.share();
 
@@ -87,71 +89,46 @@ where
         mac_key2.mul(&mac_key);
         let (mac_key2_sh0, mac_key2_sh1) = mac_key2.share();
 
-        // Need a separate MAC key for last level of tree.
-        let mac_key_last = U::random();
-        let (mac_key_sh0_last, mac_key_sh1_last) = mac_key_last.share();
-
-        let mut mac_key2_last = mac_key_last.clone();
-        mac_key2_last.mul(&mac_key_last);
-        let (mac_key2_sh0_last, mac_key2_sh1_last) = mac_key2_last.share();
-
-        let mut values = Vec::new();
-        for i in 0..alpha_bits.len()-1 {
-            // Compute (x, a.x)
+        let mut values: Vec<(T, T)> = Vec::with_capacity(alpha_bits.len());
+        for i in 0..alpha_bits.len() {
             let mut mac_val = values_in[i].clone();
             mac_val.mul(&mac_key);
             values.push((values_in[i].clone(), mac_val));
         }
 
-        let mut mac_val_last = value_last.clone();
-        mac_val_last.mul(&mac_key_last);
-        let value_last_with_mac = (value_last.clone(), mac_val_last);
+        let (dpf_key0, dpf_key1) = dpf::DPFKey::gen(alpha_bits, &values);
 
-        let (dpf_key0, dpf_key1) = dpf::DPFKey::gen(alpha_bits, &values, &value_last_with_mac);
-
+        // Beaver triples for the per-level 2-round secure decision protocol.
+        // TRIPLES_PER_LEVEL = 3 multiplications per level: one for the original
+        // sketch check (z^2 - z* = 0), and two for verifying the MAC.
         let mut triples0 = vec![];
         let mut triples1 = vec![];
-        for _i in 0..TRIPLES_PER_LEVEL * (alpha_bits.len() - 1) {
+        for _i in 0..TRIPLES_PER_LEVEL * alpha_bits.len() {
             let t = mpc::TripleShare::new();
             triples0.push(t[0].clone());
             triples1.push(t[1].clone());
         }
 
-        let mut triples0_last = vec![];
-        let mut triples1_last = vec![];
-        for _i in 0..TRIPLES_PER_LEVEL {
-            let t = mpc::TripleShare::new();
-            triples0_last.push(t[0].clone());
-            triples1_last.push(t[1].clone());
-        }
-
-
         [
             SketchDPFKey {
                 mac_key: mac_key_sh0,
                 mac_key2: mac_key2_sh0,
-                mac_key_last: mac_key_sh0_last,
-                mac_key2_last: mac_key2_sh0_last,
                 key: dpf_key0,
                 triples: triples0,
-                triples_last: triples0_last
             },
             SketchDPFKey {
                 mac_key: mac_key_sh1,
                 mac_key2: mac_key2_sh1,
-                mac_key_last: mac_key_sh1_last,
-                mac_key2_last: mac_key2_sh1_last,
                 key: dpf_key1,
                 triples: triples1,
-                triples_last: triples1_last
             },
         ]
     }
 
-    pub fn gen_from_str(s: &str) -> [SketchDPFKey<T,U>; 2] {
+    pub fn gen_from_str(s: &str) -> [SketchDPFKey<T>; 2] {
         let bits = crate::string_to_bits(s);
-        let values = vec![T::one(); bits.len()-1];
-        SketchDPFKey::gen(&bits, &values, &U::one())
+        let values = vec![T::one(); bits.len()];
+        SketchDPFKey::gen(&bits, &values)
     }
 
     pub fn sketch_at(
@@ -168,51 +145,6 @@ where
         for v in vector_in {
             // Get r_i from PRG stream
             let mut sketch_r = T::zero();
-            sketch_r.from_rng(rand_stream);
-
-            // Compute r_i^2
-            let mut sketch_r2 = sketch_r.clone();
-            sketch_r2.mul_lazy(&sketch_r);
-
-            // Compute
-            //          <r, x>
-            //          <r^2, x>
-            //          <r, k.x> 
-
-            let (x, kx) = v;
-
-            let mut tmp0 = x.clone();
-            tmp0.mul_lazy(&sketch_r);
-
-            let mut tmp1 = x.clone();
-            tmp1.mul_lazy(&sketch_r2);
-
-            let mut tmp2 = kx.clone();
-            tmp2.mul_lazy(&sketch_r);
-
-            out.r_x.add_lazy(&tmp0);
-            out.r2_x.add_lazy(&tmp1);
-            out.r_kx.add_lazy(&tmp2);
-        }
-
-        out.reduce();
-        out
-    }
-
-    pub fn sketch_at_last(
-        &self,
-        vector_in: &[(U, U)],
-        rand_stream: &mut impl rand::Rng,
-    ) -> SketchOutput<U> {
-        let mut out: SketchOutput<U> = SketchOutput::zero();
-
-        out.rand1.from_rng(rand_stream);
-        out.rand2.from_rng(rand_stream);
-        out.rand3.from_rng(rand_stream);
-
-        for v in vector_in {
-            // Get r_i from PRG stream
-            let mut sketch_r = U::zero();
             sketch_r.from_rng(rand_stream);
 
             // Compute r_i^2
@@ -244,21 +176,18 @@ where
         out
     }
 
-
-    pub fn eval(&self, idx: &[bool]) -> U {
-        debug_assert!(idx.len() <= self.key.domain_size()+1);
+    /// Evaluate the inner DPF at index `idx` and return the κ-MAC component
+    /// (the second half of the (x, κ·x) pair).
+    pub fn eval(&self, idx: &[bool]) -> T {
+        debug_assert!(idx.len() <= self.key.domain_size());
         debug_assert!(!idx.is_empty());
 
-        (self.key.eval(idx).1).1
+        let (vals, _states) = self.key.eval(idx);
+        vals.last().expect("eval returned no values").1.clone()
     }
 
     pub fn eval_bit(&self, state: &dpf::EvalState, dir: bool) -> (dpf::EvalState, T, T) {
         let (st, val) = self.key.eval_bit(state, dir);
-        (st, val.0, val.1)
-    }
-
-    pub fn eval_bit_last(&self, state: &dpf::EvalState, dir: bool) -> (dpf::EvalState, U, U) {
-        let (st, val) = self.key.eval_bit_last(state, dir);
         (st, val.0, val.1)
     }
 
@@ -301,12 +230,13 @@ mod tests {
     fn mac_keys() {
         let nbits = 3;
         let alpha = crate::u32_to_bits(nbits, 3);
+        // One β per level — same uniform value at every level of the tree.
         let betas = vec![
             FieldElm::from(7u32),
             FieldElm::from(17u32),
+            FieldElm::from(2u32),
         ];
-        let beta_last = FieldElm::from(2u32);
-        let keys = SketchDPFKey::gen(&alpha, &betas, &beta_last);
+        let keys = SketchDPFKey::gen(&alpha, &betas);
 
         let mut mac = FieldElm::zero();
         let mut mac2 = FieldElm::zero();
@@ -320,59 +250,5 @@ mod tests {
         println!("mac2 = {:?}", mac2);
         mac.mul(&mac.clone());
         assert_eq!(mac, mac2);
-    }
-
-    #[test]
-    fn mac_value() {
-        let nbits = 3;
-        let alpha = crate::u32_to_bits(nbits, 3);
-        let betas = vec![
-            FieldElm::from(7u32),
-            FieldElm::from(17u32),
-        ];
-        let beta_last = FieldElm::from(2u32);
-        let keys = SketchDPFKey::gen(&alpha, &betas, &beta_last);
-
-        let mut mac = FieldElm::zero();
-        let mut mac2 = FieldElm::zero();
-
-        for i in 0..2 {
-            mac.add(&keys[i].mac_key);
-            mac2.add(&keys[i].mac_key2);
-        }
-
-        for i in 0..(1 << nbits)-1 {
-            let alpha_eval = crate::u32_to_bits(nbits, i);
-
-            println!("Alpha: {:?}", alpha);
-            for j in 0..((nbits-1) as usize) {
-                if j < 2 {
-                    continue;
-                }
-
-                let eval0 = keys[0].key.eval(&alpha_eval[0..j].to_vec());
-                let eval1 = keys[1].key.eval(&alpha_eval[0..j].to_vec());
-
-                assert_eq!(eval0.0.len(), j-1);
-                assert_eq!(eval1.0.len(), j-1);
-
-                let mut tmp0 = FieldElm::zero();
-                tmp0.add(&eval0.0[j - 1].0);
-                tmp0.add(&eval1.0[j - 1].0);
-
-                let mut tmp1 = FieldElm::zero();
-                tmp1.add(&eval0.0[j - 1].1);
-                tmp1.add(&eval1.0[j - 1].1);
-                tmp1.add(&keys[0].mac_key2);
-                tmp1.add(&keys[1].mac_key2);
-
-                // Should be that
-                //   mac*tmp0 + mac2 = tmp1
-                let mut shouldbe = tmp0.clone();
-                shouldbe.mul(&mac);
-                shouldbe.add(&mac2);
-                assert_eq!(shouldbe, tmp1);
-            }
-        }
     }
 }

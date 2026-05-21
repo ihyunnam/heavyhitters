@@ -437,7 +437,16 @@ impl crate::Group for FieldElm {
 impl crate::prg::FromRng for FieldElm {
     #[inline]
     fn from_rng(&mut self, rng: &mut impl rand::Rng) {
-        // self.value = rng.gen_biguint_below(&MODULUS.value);
+        // We can't call RandBigInt::gen_biguint_below directly because FromRng's
+        // bound is the `rand` crate while RandBigInt requires `ark_std::rand`.
+        // Sample enough bytes to oversample MODULUS (so reduction has negligible bias)
+        // and reduce mod MODULUS.
+        let modulus_bits = MODULUS.value.bits() as usize;
+        let n_bytes = modulus_bits / 8 + 16;
+        let mut bytes = vec![0u8; n_bytes];
+        rand::Rng::fill(rng, &mut bytes[..]);
+        let raw = BigUint::from_bytes_le(&bytes);
+        self.value = raw % &MODULUS.value;
     }
 }
 
@@ -604,9 +613,8 @@ where
 
     #[inline]
     fn reduce(&mut self) {
-        // self.0.reduce();
-        // self.1.reduce();
-        println!("REDUCE2");
+        self.0.reduce();
+        self.1.reduce();
     }
 
     #[inline]

@@ -49,16 +49,20 @@ pub trait FromRng {
 }
 
 pub struct PrgStream {
+    seed: PrgSeed,
     stream: Aes128Ctr,
 }
 
-// impl Clone for PrgStream {
-//     fn clone(&self) -> Self {
-//         PrgStream {
-//             stream: self.stream.clone()
-//         }
-//     }
-// }
+impl Clone for PrgStream {
+    /// Clone the stream by re-deriving it from the original seed. Aes128Ctr itself
+    /// is not Clone, so we restart from byte 0 rather than try to preserve position.
+    /// Callers in sketch.rs / collect.rs rely on clone() returning *another stream
+    /// starting from the same seed* (so that every key sees an identical r̄ vector
+    /// in the sketching protocol), which matches this semantic exactly.
+    fn clone(&self) -> Self {
+        self.seed.to_rng()
+    }
+}
 
 pub struct PrgOutput {
     pub bits: (bool, bool),
@@ -91,6 +95,7 @@ impl PrgSeed {
         let key = GenericArray::from_slice(&self.key);
         let nonce = GenericArray::from_slice(&iv);
         PrgStream {
+            seed: self.clone(),
             stream: Aes128Ctr::new(key, nonce),
         }
     }
