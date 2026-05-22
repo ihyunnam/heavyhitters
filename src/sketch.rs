@@ -131,6 +131,55 @@ where
         SketchDPFKey::gen(&bits, &values)
     }
 
+    /// Non-incremental SketchDPFKey: the inner DPF carries the (value, κ·value)
+    /// pair only at the leaf, all intermediate levels carry zero. Use this when
+    /// you need a one-shot Hamming-weight-1 sketch over the full 2^depth domain
+    /// (eval_full_domain reconstructs to (value, κ·value) at the target index and
+    /// (0, 0) elsewhere) — typical for index-based histograms. With this layout
+    /// `eval_full_domain` (which uses `eval_bit_seed_only` at intermediates) is
+    /// correct, unlike `gen` which sets values at every level and requires a
+    /// full eval_bit descent.
+    ///
+    /// Only `TRIPLES_PER_LEVEL` triples are produced (enough for one sketch check
+    /// at level 0); MulState::new must be called with level=0.
+    pub fn gen_non_incr(alpha_bits: &[bool], value_in: &T) -> [SketchDPFKey<T>; 2] {
+        let mac_key = T::random();
+        let (mac_key_sh0, mac_key_sh1) = mac_key.share();
+
+        let mut mac_key2 = mac_key.clone();
+        mac_key2.mul(&mac_key);
+        let (mac_key2_sh0, mac_key2_sh1) = mac_key2.share();
+
+        let mut mac_val = value_in.clone();
+        mac_val.mul(&mac_key);
+        let leaf_value: (T, T) = (value_in.clone(), mac_val);
+
+        let (dpf_key0, dpf_key1) = dpf::DPFKey::gen_non_incr(alpha_bits, &leaf_value);
+
+        let mut triples0 = vec![];
+        let mut triples1 = vec![];
+        for _ in 0..TRIPLES_PER_LEVEL {
+            let t = mpc::TripleShare::new();
+            triples0.push(t[0].clone());
+            triples1.push(t[1].clone());
+        }
+
+        [
+            SketchDPFKey {
+                mac_key: mac_key_sh0,
+                mac_key2: mac_key2_sh0,
+                key: dpf_key0,
+                triples: triples0,
+            },
+            SketchDPFKey {
+                mac_key: mac_key_sh1,
+                mac_key2: mac_key2_sh1,
+                key: dpf_key1,
+                triples: triples1,
+            },
+        ]
+    }
+
     pub fn sketch_at(
         &self,
         vector_in: &[(T, T)],
