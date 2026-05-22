@@ -133,11 +133,16 @@ where
         values
     }
 
+    /// Returns `(sketches, eval_vectors)` for keys in `start..end` over the current frontier.
+    /// `sketches[i]` is the SketchOutput for key `start+i`.
+    /// `eval_vectors[i][j] = (x, κ·x)` evaluated by key `start+i` at frontier node `j` —
+    /// callers that need to do level-correspondence checks (sibling-collapse + add prev
+    /// level + divide by 2, then re-sketch) consume this second return value.
     pub fn tree_sketch_frontier(
         &mut self,
         start: usize,
         end: usize,
-    ) -> Vec<sketch::SketchOutput<T>> {
+    ) -> (Vec<sketch::SketchOutput<T>>, Vec<Vec<(T, T)>>) {
         println!("Sketching frontier {:?} to {:?}", start, end);
         // sketch_vectors[i][j] = { j'th value expanded from i'th key }
 
@@ -167,7 +172,7 @@ where
 
         println!("... Done");
 
-        out
+        (out, sketch_vectors)
     }
 
     pub fn apply_sketch_results(&mut self, res: &[bool]) {
