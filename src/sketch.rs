@@ -194,6 +194,14 @@ where
     pub fn eval_init(&self) -> dpf::EvalState {
         self.key.eval_init()
     }
+
+    /// Evaluate the inner (x, κ·x) DPF over the full domain. Used for
+    /// regular-DPF (non-incremental) malicious-secure histogram writes: caller
+    /// sketches the returned vector for a weight-1 + MAC check, then aggregates
+    /// the on-path bin into the histogram.
+    pub fn eval_full_domain(&self) -> Vec<(T, T)> {
+        self.key.eval_full_domain()
+    }
 }
 
 #[cfg(test)]
