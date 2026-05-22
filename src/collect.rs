@@ -143,7 +143,7 @@ where
         start: usize,
         end: usize,
     ) -> (Vec<sketch::SketchOutput<T>>, Vec<Vec<(T, T)>>) {
-        println!("Sketching frontier {:?} to {:?}", start, end);
+        // println!("Sketching frontier {:?} to {:?}", start, end);
         // sketch_vectors[i][j] = { j'th value expanded from i'th key }
 
         assert!(start < end);
