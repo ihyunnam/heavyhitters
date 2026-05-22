@@ -109,7 +109,7 @@ where
     }
 
     pub fn tree_crawl(&mut self) -> Vec<T> {
-        println!("Crawl");
+        // println!("Crawl");
         let next_frontier = self
             .frontier
             .par_iter()
@@ -127,7 +127,7 @@ where
             .iter()
             .map(|node| node.value.clone())
             .collect::<Vec<T>>();
-        println!("...done");
+        // println!("...done");
 
         self.frontier = next_frontier;
         values
@@ -170,7 +170,7 @@ where
             })
             .collect::<Vec<sketch::SketchOutput<T>>>();
 
-        println!("... Done");
+        // println!("... Done");
 
         (out, sketch_vectors)
     }
