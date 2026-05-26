@@ -1,9 +1,119 @@
 use crate::dpf;
 use crate::mpc;
+use crate::{Group, Share};
+use crate::prg::FromRng;
+use crate::fastfield::FE;
 
 use serde::{Deserialize, Serialize};
 
 pub const TRIPLES_PER_LEVEL: usize = 3;
+
+/// Embedding dimension carried by [`EmbCnt`]. Hardcoded here because the
+/// `TwoTypeSketchDPFKey` path is only ever used with `EmbCnt` in
+/// private-text-summary (`clustering_demo_indexed.rs`); see the note on
+/// [`EmbCnt`].
+pub const DIM: usize = 768;
+
+/// `EmbCnt` — combined `(count, embedding)` DPF payload for `TwoTypeSketchDPFKey`.
+///
+/// This type exists **only** so `dpf::DPFKey::gen` has a concrete payload to
+/// carry through the tree (private-text-summary manipulates `EmbCnt` values
+/// during sketch-tree traversal). Inside counttree it is never arithmetically
+/// operated on: the sketch checks read only the `count` field (an `FE`). The
+/// `Group`/`Share` impls below exist to satisfy the `DPFKey` payload bounds —
+/// `add`/`sub`/`negate` drive `gen`'s correction words; `mul`/`mul_lazy`/
+/// `reduce` are required by the trait but never invoked on `EmbCnt`, so they
+/// act on the `count` field only.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EmbCnt {
+    pub count: FE,
+    pub embedding: Vec<u32>,
+}
+
+impl From<u32> for EmbCnt {
+    #[inline]
+    fn from(x: u32) -> Self {
+        EmbCnt { count: FE::from(x), embedding: vec![0u32; DIM] }
+    }
+}
+
+impl Group for EmbCnt {
+    #[inline]
+    fn zero() -> Self {
+        EmbCnt { count: FE::new(0), embedding: vec![0u32; DIM] }
+    }
+
+    #[inline]
+    fn one() -> Self {
+        EmbCnt { count: FE::new(1), embedding: vec![1u32; DIM] }
+    }
+
+    #[inline]
+    fn negate(&mut self) {
+        self.count.negate();
+        for a in self.embedding.iter_mut() {
+            *a = a.wrapping_neg();
+        }
+    }
+
+    #[inline]
+    fn reduce(&mut self) {
+        self.count.reduce();
+    }
+
+    #[inline]
+    fn add(&mut self, other: &Self) {
+        self.count.add(&other.count);
+        if other.embedding.is_empty() {
+            return;
+        }
+        for (a, b) in self.embedding.iter_mut().zip(other.embedding.iter()) {
+            *a = a.wrapping_add(*b);
+        }
+    }
+
+    #[inline]
+    fn add_lazy(&mut self, other: &Self) {
+        self.add(other);
+    }
+
+    #[inline]
+    fn sub(&mut self, other: &Self) {
+        self.count.sub(&other.count);
+        if other.embedding.is_empty() {
+            return;
+        }
+        for (a, b) in self.embedding.iter_mut().zip(other.embedding.iter()) {
+            *a = a.wrapping_sub(*b);
+        }
+    }
+
+    /// Never invoked on `EmbCnt` (only the `count` feeds the sketch checks);
+    /// acts on the `count` field to keep the trait total.
+    #[inline]
+    fn mul(&mut self, other: &Self) {
+        self.count.mul(&other.count);
+    }
+
+    #[inline]
+    fn mul_lazy(&mut self, other: &Self) {
+        self.count.mul_lazy(&other.count);
+    }
+}
+
+impl crate::prg::FromRng for EmbCnt {
+    fn from_rng(&mut self, rng: &mut (impl rand::Rng + rand_core::RngCore)) {
+        <FE as crate::prg::FromRng>::from_rng(&mut self.count, rng);
+        if self.embedding.len() != DIM {
+            self.embedding = vec![0u32; DIM];
+        }
+        for x in self.embedding.iter_mut() {
+            *x = rand::Rng::gen::<u32>(rng);
+        }
+    }
+}
+
+impl crate::Share for EmbCnt {}
 
 /// Malicious-secure DPF (Section 4.2 of "Lightweight Techniques for Private Heavy Hitters", Boneh et al.).
 ///
@@ -261,15 +371,16 @@ pub struct TwoTypeSketchDPFKey<U> {    // U=FE when using with GlimpseKeyCollect
     pub triples: Vec<mpc::TripleShare<U>>,
 }
 
-impl<U> TwoTypeSketchDPFKey<U>    // U=FE
-where
-    U: crate::Share + std::fmt::Debug + std::cmp::PartialEq + Clone,
-{
+// Concrete on `FE`: the per-level MAC is `κ·count` where `count` is the
+// `EmbCnt`'s `FE` field, so the MAC key `κ` (and therefore `U`) is necessarily
+// `FE`. The struct stays generic; only this functional `impl` is pinned to `FE`
+// (the only instantiation private-text-summary uses).
+impl TwoTypeSketchDPFKey<FE> {
     #[allow(clippy::needless_range_loop)]
-    pub fn gen(alpha_bits: &[bool], values_in: &[EmbCnt]) -> [TwoTypeSketchDPFKey<U>; 2] {
+    pub fn gen(alpha_bits: &[bool], values_in: &[EmbCnt]) -> [TwoTypeSketchDPFKey<FE>; 2] {
         debug_assert!(alpha_bits.len() == values_in.len());
         // For MAC key a, encode each level's value x as the pair (x, a·x).
-        let mac_key = U::random();
+        let mac_key = FE::random();
         let (mac_key_sh0, mac_key_sh1) = mac_key.share();
         let mut mac_key2 = mac_key.clone();
         mac_key2.mul(&mac_key);
@@ -309,18 +420,18 @@ where
         ]
     }
 
-    pub fn gen_from_str(s: &str) -> [TwoTypeSketchDPFKey<T>; 2] {
+    pub fn gen_from_str(s: &str) -> [TwoTypeSketchDPFKey<FE>; 2] {
         let bits = crate::string_to_bits(s);
-        let values = vec![T::one(); bits.len()];
+        let values = vec![EmbCnt::one(); bits.len()];
         TwoTypeSketchDPFKey::gen(&bits, &values)
     }
 
     pub fn sketch_at(
         &self,
-        vector_in: &[(T, T)],
+        vector_in: &[(FE, FE)],
         rand_stream: &mut impl rand::Rng,
-    ) -> SketchOutput<T> {
-        let mut out: SketchOutput<T> = SketchOutput::zero();
+    ) -> SketchOutput<FE> {
+        let mut out: SketchOutput<FE> = SketchOutput::zero();
 
         out.rand1.from_rng(rand_stream);
         out.rand2.from_rng(rand_stream);
@@ -328,7 +439,7 @@ where
 
         for v in vector_in {
             // Get r_i from PRG stream
-            let mut sketch_r = T::zero();
+            let mut sketch_r = FE::zero();
             sketch_r.from_rng(rand_stream);
 
             // Compute r_i^2
@@ -362,7 +473,7 @@ where
 
     /// Evaluate the inner DPF at index `idx` and return the κ-MAC component
     /// (the second half of the (x, κ·x) pair).
-    pub fn eval(&self, idx: &[bool]) -> T {
+    pub fn eval(&self, idx: &[bool]) -> EmbCnt {
         debug_assert!(idx.len() <= self.key.domain_size());
         debug_assert!(!idx.is_empty());
 
@@ -370,7 +481,7 @@ where
         vals.last().expect("eval returned no values").1.clone()
     }
 
-    pub fn eval_bit(&self, state: &dpf::EvalState, dir: bool) -> (dpf::EvalState, T, T) {
+    pub fn eval_bit(&self, state: &dpf::EvalState, dir: bool) -> (dpf::EvalState, EmbCnt, EmbCnt) {
         let (st, val) = self.key.eval_bit(state, dir);
         (st, val.0, val.1)
     }
@@ -383,7 +494,7 @@ where
     /// regular-DPF (non-incremental) malicious-secure histogram writes: caller
     /// sketches the returned vector for a weight-1 + MAC check, then aggregates
     /// the on-path bin into the histogram.
-    pub fn eval_full_domain(&self) -> Vec<(T, T)> {
+    pub fn eval_full_domain(&self) -> Vec<(EmbCnt, EmbCnt)> {
         self.key.eval_full_domain()
     }
 }
