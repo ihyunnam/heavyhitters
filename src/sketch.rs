@@ -253,6 +253,141 @@ where
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TwoTypeSketchDPFKey<U> {    // U=FE when using with GlimpseKeyCollection
+    pub mac_key: U,
+    pub mac_key2: U,
+    key: dpf::DPFKey<(EmbCnt, EmbCnt)>,
+    pub triples: Vec<mpc::TripleShare<U>>,
+}
+
+impl<U> TwoTypeSketchDPFKey<U>    // U=FE
+where
+    U: crate::Share + std::fmt::Debug + std::cmp::PartialEq + Clone,
+{
+    #[allow(clippy::needless_range_loop)]
+    pub fn gen(alpha_bits: &[bool], values_in: &[EmbCnt]) -> [TwoTypeSketchDPFKey<U>; 2] {
+        debug_assert!(alpha_bits.len() == values_in.len());
+        // For MAC key a, encode each level's value x as the pair (x, a·x).
+        let mac_key = U::random();
+        let (mac_key_sh0, mac_key_sh1) = mac_key.share();
+        let mut mac_key2 = mac_key.clone();
+        mac_key2.mul(&mac_key);
+        let (mac_key2_sh0, mac_key2_sh1) = mac_key2.share();
+        let mut values: Vec<(EmbCnt, EmbCnt)> = Vec::with_capacity(alpha_bits.len());
+        for i in 0..alpha_bits.len() {
+            let mut mac_val = values_in[i].count.clone();
+            mac_val.mul(&mac_key);
+            let payload = values_in[i].clone();
+            let encoding = EmbCnt { count: mac_val, embedding: vec![0u32] };    // will not be used
+            values.push((payload, encoding));
+        }
+        let (dpf_key0, dpf_key1) = dpf::DPFKey::gen(alpha_bits, &values);
+        // Beaver triples for the per-level 2-round secure decision protocol.
+        // TRIPLES_PER_LEVEL = 3 multiplications per level: one for the original
+        // sketch check (z^2 - z* = 0), and two for verifying the MAC.
+        let mut triples0 = vec![];
+        let mut triples1 = vec![];
+        for _i in 0..TRIPLES_PER_LEVEL * alpha_bits.len() {
+            let t = mpc::TripleShare::new();
+            triples0.push(t[0].clone());
+            triples1.push(t[1].clone());
+        }
+        [
+            TwoTypeSketchDPFKey {
+                mac_key: mac_key_sh0,
+                mac_key2: mac_key2_sh0,
+                key: dpf_key0,
+                triples: triples0,
+            },
+            TwoTypeSketchDPFKey {
+                mac_key: mac_key_sh1,
+                mac_key2: mac_key2_sh1,
+                key: dpf_key1,
+                triples: triples1,
+            },
+        ]
+    }
+
+    pub fn gen_from_str(s: &str) -> [TwoTypeSketchDPFKey<T>; 2] {
+        let bits = crate::string_to_bits(s);
+        let values = vec![T::one(); bits.len()];
+        TwoTypeSketchDPFKey::gen(&bits, &values)
+    }
+
+    pub fn sketch_at(
+        &self,
+        vector_in: &[(T, T)],
+        rand_stream: &mut impl rand::Rng,
+    ) -> SketchOutput<T> {
+        let mut out: SketchOutput<T> = SketchOutput::zero();
+
+        out.rand1.from_rng(rand_stream);
+        out.rand2.from_rng(rand_stream);
+        out.rand3.from_rng(rand_stream);
+
+        for v in vector_in {
+            // Get r_i from PRG stream
+            let mut sketch_r = T::zero();
+            sketch_r.from_rng(rand_stream);
+
+            // Compute r_i^2
+            let mut sketch_r2 = sketch_r.clone();
+            sketch_r2.mul_lazy(&sketch_r);
+
+            // Compute
+            //          <r, x>
+            //          <r^2, x>
+            //          <r, k.x>
+
+            let (x, kx) = v;
+
+            let mut tmp0 = x.clone();
+            tmp0.mul_lazy(&sketch_r);
+
+            let mut tmp1 = x.clone();
+            tmp1.mul_lazy(&sketch_r2);
+
+            let mut tmp2 = kx.clone();
+            tmp2.mul_lazy(&sketch_r);
+
+            out.r_x.add_lazy(&tmp0);
+            out.r2_x.add_lazy(&tmp1);
+            out.r_kx.add_lazy(&tmp2);
+        }
+
+        out.reduce();
+        out
+    }
+
+    /// Evaluate the inner DPF at index `idx` and return the κ-MAC component
+    /// (the second half of the (x, κ·x) pair).
+    pub fn eval(&self, idx: &[bool]) -> T {
+        debug_assert!(idx.len() <= self.key.domain_size());
+        debug_assert!(!idx.is_empty());
+
+        let (vals, _states) = self.key.eval(idx);
+        vals.last().expect("eval returned no values").1.clone()
+    }
+
+    pub fn eval_bit(&self, state: &dpf::EvalState, dir: bool) -> (dpf::EvalState, T, T) {
+        let (st, val) = self.key.eval_bit(state, dir);
+        (st, val.0, val.1)
+    }
+
+    pub fn eval_init(&self) -> dpf::EvalState {
+        self.key.eval_init()
+    }
+
+    /// Evaluate the inner (x, κ·x) DPF over the full domain. Used for
+    /// regular-DPF (non-incremental) malicious-secure histogram writes: caller
+    /// sketches the returned vector for a weight-1 + MAC check, then aggregates
+    /// the on-path bin into the histogram.
+    pub fn eval_full_domain(&self) -> Vec<(T, T)> {
+        self.key.eval_full_domain()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
