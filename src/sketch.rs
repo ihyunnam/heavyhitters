@@ -364,11 +364,11 @@ where
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TwoTypeSketchDPFKey<U> {    // U=FE when using with GlimpseKeyCollection
-    pub mac_key: U,
-    pub mac_key2: U,
+pub struct TwoTypeSketchDPFKey<T> {    // U=FE when using with GlimpseKeyCollection
+    pub mac_key: T,
+    pub mac_key2: T,
     key: dpf::DPFKey<(EmbCnt, EmbCnt)>,
-    pub triples: Vec<mpc::TripleShare<U>>,
+    pub triples: Vec<mpc::TripleShare<T>>,
 }
 
 // Concrete on `FE`: the per-level MAC is `κ·count` where `count` is the
@@ -379,12 +379,15 @@ impl TwoTypeSketchDPFKey<FE> {
     #[allow(clippy::needless_range_loop)]
     pub fn gen(alpha_bits: &[bool], values_in: &[EmbCnt]) -> [TwoTypeSketchDPFKey<FE>; 2] {
         debug_assert!(alpha_bits.len() == values_in.len());
+        
         // For MAC key a, encode each level's value x as the pair (x, a·x).
-        let mac_key = FE::random();
+        let mac_key = T::random();
         let (mac_key_sh0, mac_key_sh1) = mac_key.share();
+
         let mut mac_key2 = mac_key.clone();
         mac_key2.mul(&mac_key);
         let (mac_key2_sh0, mac_key2_sh1) = mac_key2.share();
+
         let mut values: Vec<(EmbCnt, EmbCnt)> = Vec::with_capacity(alpha_bits.len());
         for i in 0..alpha_bits.len() {
             let mut mac_val = values_in[i].count.clone();
@@ -393,7 +396,9 @@ impl TwoTypeSketchDPFKey<FE> {
             let encoding = EmbCnt { count: mac_val, embedding: vec![0u32] };    // will not be used
             values.push((payload, encoding));
         }
+
         let (dpf_key0, dpf_key1) = dpf::DPFKey::gen(alpha_bits, &values);
+
         // Beaver triples for the per-level 2-round secure decision protocol.
         // TRIPLES_PER_LEVEL = 3 multiplications per level: one for the original
         // sketch check (z^2 - z* = 0), and two for verifying the MAC.
