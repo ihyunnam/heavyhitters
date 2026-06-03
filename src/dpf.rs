@@ -263,8 +263,55 @@ where
         }
         result
     }
-  
-    
+
+    /// Like `eval_full_domain`, but only materializes the first `count` leaves
+    /// (result indices `0..count`, same LSB-first ordering as `eval_full_domain`,
+    /// so `eval_domain_prefix(count)[i] == eval_full_domain()[i]` for `i < count`).
+    ///
+    /// The intermediate seed-only BFS is identical: the first half of the leaves
+    /// (last-level bit = false) needs every state in the final layer, so the
+    /// states can't be pruned. The saving is the last-level word `eval_bit` and
+    /// the result allocation for the `2^depth - count` discarded leaves.
+    pub fn eval_domain_prefix(&self, count: usize) -> Vec<T> {
+        let depth = self.domain_size();
+        let full = 1usize << depth;
+        debug_assert!(count <= full);
+        if count == full {
+            return self.eval_full_domain();
+        }
+
+        let mut current_layer: Vec<EvalState> = vec![self.eval_init()];
+        for _level in 0..depth - 1 {
+            let n = current_layer.len();
+            let mut next_layer = Vec::with_capacity(n * 2);
+            for state in &current_layer {
+                next_layer.push(self.eval_bit_seed_only(state, false));
+            }
+            for state in &current_layer {
+                next_layer.push(self.eval_bit_seed_only(state, true));
+            }
+            current_layer = next_layer;
+        }
+
+        let half = current_layer.len(); // = 2^(depth-1), the false/true split point
+        let mut result = Vec::with_capacity(count);
+        // First half (result indices 0..half): last-level bit = false.
+        let first_take = count.min(half);
+        for state in &current_layer[..first_take] {
+            let (_, word) = self.eval_bit(state, false);
+            result.push(word);
+        }
+        // Second half (result indices half..2*half): last-level bit = true.
+        if count > half {
+            for state in &current_layer[..count - half] {
+                let (_, word) = self.eval_bit(state, true);
+                result.push(word);
+            }
+        }
+        result
+    }
+
+
     pub fn eval_bit_in_place(&self, state: &mut EvalState, dir: bool) -> T {
         let tau = state.seed.expand_dir(!dir, dir);
         let mut seed = tau.seeds.get(dir).clone();

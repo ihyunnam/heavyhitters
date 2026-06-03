@@ -361,6 +361,14 @@ where
     pub fn eval_full_domain(&self) -> Vec<(T, T)> {
         self.key.eval_full_domain()
     }
+
+    /// Like `eval_full_domain`, but only evaluates the first `count` leaves
+    /// (result indices `0..count`, same ordering). Use when the caller only
+    /// consumes a prefix of the padded domain (e.g. `num_bins < 2^depth`), to
+    /// skip the discarded tail's word eval + allocation.
+    pub fn eval_domain_prefix(&self, count: usize) -> Vec<(T, T)> {
+        self.key.eval_domain_prefix(count)
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
