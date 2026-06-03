@@ -192,7 +192,7 @@ where
         debug_assert!(alpha_bits.len() == values_in.len());
 
         // For MAC key a, encode each level's value x as the pair (x, a·x).
-        let mac_key = T::random();
+        let mac_key = FE::random();
         let (mac_key_sh0, mac_key_sh1) = mac_key.share();
 
         let mut mac_key2 = mac_key.clone();
